@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MemAtom — Memory for AI Agents</title>
+<meta name="description" content="MemAtom is a drop-in memory SDK for any AI agent: per-message memory atoms, local embeddings (no API key), and GraphRAG retrieval." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+/* ===========================================
+   VIEWPORT FITTING: MANDATORY BASE
+   =========================================== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow-x: hidden; }
+html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+
+:root {
+  --bg:    #0e1016;
+  --bg2:   #14171f;
+  --panel: #181c26;
+  --edge:  #283040;
+  --ink:   #f5f6f8;
+  --muted: #969db0;
+  --accent:#e36f4c;
+  --accent-2:#f4a07c;
+  --accent-soft: rgba(227,111,76,0.14);
+  --green: #5ec98a;
+  --cyan:  #5ec7d6;
+
+  --title-size: clamp(2rem, 7vw, 5.5rem);
+  --h2-size:    clamp(1.4rem, 4.2vw, 3rem);
+  --h3-size:    clamp(1.05rem, 2.4vw, 1.6rem);
+  --body-size:  clamp(0.82rem, 1.5vw, 1.12rem);
+  --small-size: clamp(0.68rem, 1.05vw, 0.85rem);
+  --mono-size:  clamp(0.66rem, 1.15vw, 0.95rem);
+
+  --slide-padding: clamp(1.4rem, 5vw, 5.5rem);
+  --content-gap: clamp(0.6rem, 2vw, 1.6rem);
+  --maxw: min(92vw, 1180px);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+.deck { position: relative; }
+
+.slide {
+  width: 100vw; height: 100vh; height: 100dvh;
+  overflow: hidden; scroll-snap-align: start;
+  display: flex; flex-direction: column; justify-content: center;
+  position: relative;
+  padding: var(--slide-padding);
+  background:
+    radial-gradient(120% 90% at 85% -10%, rgba(227,111,76,0.10), transparent 55%),
+    radial-gradient(90% 80% at -10% 110%, rgba(94,199,214,0.06), transparent 50%),
+    var(--bg);
+}
+.slide-inner { width: 100%; max-width: var(--maxw); margin: 0 auto; }
+
+/* ghost section numbers */
+.ghost-num {
+  position: absolute; top: clamp(0.6rem,3vh,2.2rem); right: clamp(1rem,4vw,4rem);
+  font-family: 'Archivo Black', sans-serif;
+  font-size: clamp(3rem, 12vw, 11rem); line-height: 0.8;
+  color: transparent; -webkit-text-stroke: 1.5px rgba(255,255,255,0.06);
+  pointer-events: none; user-select: none; z-index: 0;
+}
+.kicker {
+  display:inline-flex; align-items:center; gap:0.5rem;
+  font-size: var(--small-size); letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--accent); font-weight: 600; margin-bottom: clamp(0.7rem,2vh,1.4rem);
+}
+.kicker::before { content:""; width: clamp(18px,3vw,34px); height:2px; background: var(--accent); display:inline-block; }
+
+h1 {
+  font-family: 'Archivo Black', sans-serif; font-weight: 400;
+  font-size: var(--title-size); line-height: 0.98; letter-spacing: -0.02em;
+}
+h2 {
+  font-family: 'Archivo Black', sans-serif; font-weight: 400;
+  font-size: var(--h2-size); line-height: 1.02; letter-spacing: -0.015em;
+  margin-bottom: var(--content-gap);
+}
+.accent { color: var(--accent); }
+.subtitle { font-size: var(--h3-size); color: var(--muted); font-weight: 400; line-height: 1.4; }
+p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-width: 60ch; }
+.muted { color: var(--muted); }
+.accent-bar { height: 4px; width: clamp(60px,12vw,160px); background: var(--accent); border-radius: 4px; margin-top: clamp(1rem,3vh,2rem); }
+
+/* cards & grids */
+.grid { display: grid; gap: clamp(0.6rem,1.5vw,1.1rem); margin-top: var(--content-gap); }
+.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.card {
+  background: linear-gradient(180deg, var(--panel), var(--bg2));
+  border: 1px solid var(--edge); border-radius: 16px;
+  padding: clamp(0.9rem,2vw,1.5rem); position: relative; overflow: hidden;
+}
+.card h3 { font-size: var(--h3-size); margin-bottom: 0.4em; letter-spacing: -0.01em; }
+.card p { font-size: var(--small-size); color: var(--muted); line-height: 1.45; }
+.card .icon { font-size: clamp(1.1rem,2.4vw,1.6rem); margin-bottom: 0.5rem; display:block; }
+.card.hot { background: linear-gradient(160deg, var(--accent), #c4542f); border-color: transparent; }
+.card.hot h3, .card.hot p { color: #fff; }
+.card.hot p { color: rgba(255,255,255,0.9); }
+
+/* bullets */
+.bullets { list-style: none; display: flex; flex-direction: column; gap: clamp(0.5rem,1.6vh,1rem); margin-top: var(--content-gap); }
+.bullets li { font-size: var(--body-size); line-height: 1.4; padding-left: 1.7em; position: relative; color: var(--ink); }
+.bullets li::before { content: "▸"; color: var(--accent); position: absolute; left: 0; top: 0; }
+.bullets li b { color: #fff; }
+
+/* code */
+.code {
+  background: #0b0d13; border: 1px solid var(--edge); border-radius: 14px;
+  font-family: 'JetBrains Mono', monospace; font-size: var(--mono-size);
+  line-height: 1.7; padding: clamp(0.9rem,2.2vw,1.6rem);
+  overflow: hidden; position: relative;
+}
+.code .winbar { display:flex; gap:6px; margin-bottom: 0.9rem; }
+.code .winbar i { width:11px; height:11px; border-radius:50%; display:inline-block; }
+.code pre { white-space: pre; overflow: hidden; }
+.tok-key { color: #e3a06f; }
+.tok-fn  { color: var(--cyan); }
+.tok-str { color: var(--green); }
+.tok-com { color: #5b6478; font-style: italic; }
+.tok-punct { color: #9097a6; }
+
+/* comparison table */
+.cmp { width:100%; border-collapse: collapse; margin-top: var(--content-gap); font-size: var(--small-size); }
+.cmp th, .cmp td { text-align: left; padding: clamp(0.5rem,1.3vh,0.85rem) clamp(0.6rem,1.4vw,1.1rem); border-bottom: 1px solid var(--edge); }
+.cmp th { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: var(--small-size); }
+.cmp td:first-child { color: var(--muted); }
+.cmp .yes { color: var(--ink); font-weight: 600; }
+.cmp .yes b { color: var(--accent); }
+.cmp .no { color: #6a7185; }
+.cmp tr td:nth-child(3) { background: var(--accent-soft); }
+
+/* pipeline diagram */
+.pipe { display:flex; align-items:center; justify-content:center; flex-wrap: wrap; gap: clamp(0.4rem,1.2vw,0.9rem); margin-top: clamp(0.8rem,2.5vh,1.8rem); }
+.pipe .node {
+  border:1px solid var(--edge); background: var(--panel); border-radius: 12px;
+  padding: clamp(0.55rem,1.4vw,1rem) clamp(0.7rem,1.8vw,1.3rem);
+  font-size: var(--small-size); text-align:center; line-height:1.25;
+}
+.pipe .node b { color:#fff; display:block; font-size: var(--body-size); }
+.pipe .node.accent-node { border-color: var(--accent); background: var(--accent-soft); }
+.pipe .arrow { color: var(--accent); font-size: clamp(1rem,2.2vw,1.5rem); }
+
+/* atom motif (title) */
+.atom { position:absolute; inset:0; z-index:0; pointer-events:none; opacity:0.9; }
+.atom .nucleus { position:absolute; top:50%; left:50%; width: clamp(10px,1.6vw,18px); height:clamp(10px,1.6vw,18px); margin:-9px 0 0 -9px; border-radius:50%; background: var(--accent); box-shadow: 0 0 30px 6px rgba(227,111,76,0.5); }
+.atom .orbit { position:absolute; top:50%; left:50%; border:1px solid rgba(227,111,76,0.28); border-radius:50%; transform: translate(-50%,-50%); }
+.atom .o1 { width: clamp(220px,38vw,540px); height: clamp(120px,20vw,280px); animation: spin 18s linear infinite; }
+.atom .o2 { width: clamp(220px,38vw,540px); height: clamp(120px,20vw,280px); transform: translate(-50%,-50%) rotate(60deg); animation: spin 26s linear infinite reverse; }
+.atom .o3 { width: clamp(220px,38vw,540px); height: clamp(120px,20vw,280px); transform: translate(-50%,-50%) rotate(120deg); animation: spin 22s linear infinite; }
+.atom .e { position:absolute; width: clamp(7px,1vw,11px); height: clamp(7px,1vw,11px); border-radius:50%; background: var(--accent-2); top:50%; left:0; margin-top:-5px; box-shadow:0 0 14px 2px rgba(244,160,124,0.6); }
+@keyframes spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+
+/* nav + chrome */
+.nav-dots { position: fixed; right: clamp(0.8rem,1.6vw,1.6rem); top: 50%; transform: translateY(-50%); display:flex; flex-direction:column; gap: 10px; z-index: 50; }
+.nav-dots button { width: 9px; height: 9px; border-radius:50%; border:none; background: rgba(255,255,255,0.2); cursor:pointer; padding:0; transition: all .25s; }
+.nav-dots button.active { background: var(--accent); transform: scale(1.5); }
+.counter { position: fixed; left: clamp(0.9rem,2vw,2rem); bottom: clamp(0.9rem,2vh,1.6rem); font-family:'JetBrains Mono',monospace; font-size: var(--small-size); color: var(--muted); z-index:50; }
+.counter b { color: var(--ink); }
+.progress { position: fixed; top:0; left:0; height:3px; background: var(--accent); width:0; z-index: 60; transition: width .3s ease; }
+.hint { position: fixed; right: clamp(0.9rem,2vw,2rem); bottom: clamp(0.9rem,2vh,1.6rem); font-size: var(--small-size); color: var(--muted); z-index:50; }
+.brandmark { position:absolute; top: clamp(0.9rem,2.5vh,2rem); left: var(--slide-padding); font-family:'JetBrains Mono',monospace; font-size: var(--small-size); letter-spacing:0.1em; color: var(--muted); z-index:2; }
+.brandmark b { color: var(--accent); }
+.tag { display:inline-block; font-family:'JetBrains Mono',monospace; font-size:var(--small-size); color: var(--accent); border:1px solid var(--accent); border-radius:999px; padding:.2em .8em; }
+
+/* reveal */
+.reveal { opacity:0; transform: translateY(22px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+.slide.in .reveal { opacity:1; transform:none; }
+.slide.in .reveal:nth-child(2){transition-delay:.06s}
+.slide.in .reveal:nth-child(3){transition-delay:.12s}
+.slide.in .reveal:nth-child(4){transition-delay:.18s}
+.slide.in .reveal:nth-child(5){transition-delay:.24s}
+.stagger > * { opacity:0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+.slide.in .stagger > *{ opacity:1; transform:none; }
+.slide.in .stagger > *:nth-child(1){transition-delay:.10s}
+.slide.in .stagger > *:nth-child(2){transition-delay:.18s}
+.slide.in .stagger > *:nth-child(3){transition-delay:.26s}
+.slide.in .stagger > *:nth-child(4){transition-delay:.34s}
+.slide.in .stagger > *:nth-child(5){transition-delay:.42s}
+.slide.in .stagger > *:nth-child(6){transition-delay:.50s}
+
+.two-col { display:grid; grid-template-columns: 1.05fr 1fr; gap: clamp(1rem,3vw,2.6rem); align-items:center; }
+
+/* ---- narrow widths ---- */
+@media (max-width: 820px){ .two-col{ grid-template-columns:1fr; gap: clamp(0.8rem,2vw,1.4rem);} .grid.cols-3{grid-template-columns:repeat(2,1fr);} .pipe{flex-direction:column;} .pipe .arrow{transform:rotate(90deg);} }
+/* keep the 6-card grid at 2 columns even on phones (3 rows, not 6) */
+@media (max-width: 560px){ .grid.cols-2{grid-template-columns:1fr;} .grid.cols-3{grid-template-columns:repeat(2,1fr);} .nav-dots{display:none;} }
+
+/* ---- short heights: compress so nothing clips (overflow is hidden) ---- */
+@media (max-height: 720px){
+  :root{ --slide-padding: clamp(1rem,3.2vw,2.4rem); --content-gap: clamp(0.5rem,1.5vh,1rem); }
+}
+@media (max-height: 560px){
+  :root{
+    --slide-padding: clamp(0.7rem,2.4vw,1.4rem);
+    --content-gap: clamp(0.35rem,1.1vh,0.7rem);
+    --title-size: clamp(1.3rem,5vw,2.2rem);
+    --h2-size: clamp(1.05rem,3.2vw,1.55rem);
+    --h3-size: clamp(0.92rem,2vw,1.18rem);
+    --body-size: clamp(0.72rem,1.3vw,0.92rem);
+    --mono-size: clamp(0.62rem,1vw,0.82rem);
+  }
+  .ghost-num, .hint, .nav-dots, .brandmark { display:none; }
+  .card{ padding: clamp(0.55rem,1.4vw,0.9rem); border-radius:12px; }
+  .accent-bar{ margin-top:0.6rem; }
+  .kicker{ margin-bottom:0.5rem; }
+  .atom{ opacity:0.4; }
+}
+@media (max-height: 430px){
+  :root{
+    --slide-padding: clamp(0.45rem,1.6vw,0.9rem);
+    --content-gap: 0.28rem;
+    --title-size: clamp(1.05rem,3.8vw,1.6rem);
+    --h2-size: clamp(0.9rem,2.5vw,1.2rem);
+    --body-size: clamp(0.64rem,1.05vw,0.8rem);
+    --small-size: clamp(0.58rem,0.9vw,0.72rem);
+  }
+  h2{ margin-bottom:0.4rem; }
+  .kicker{ margin-bottom:0.35rem; }
+  .card{ padding:0.5rem 0.6rem; }
+  .card .icon{ display:none; }
+  .card p{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .bullets{ gap:0.26rem; }
+  .bullets li{ line-height:1.3; }
+  .code{ line-height:1.45; padding:0.6rem; }
+  .grid{ gap:0.4rem; }
+}
+/* short BUT wide (landscape phone): keep two-col side-by-side and pipe horizontal */
+@media (max-height: 440px) and (min-width: 560px){
+  .two-col{ grid-template-columns: 1.05fr 1fr; gap: clamp(0.7rem,2.4vw,1.5rem); }
+  .pipe{ flex-direction: row; }
+  .pipe .arrow{ transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{ animation-duration:.01ms!important; transition-duration:.2s!important; }
+  html{ scroll-behavior:auto; }
+  .atom .orbit{ animation:none!important; }
+}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<nav class="nav-dots" id="navDots" aria-label="Slides"></nav>
+<div class="counter"><b id="curNum">01</b> / <span id="totNum">15</span></div>
+<div class="hint">↓ scroll · → next · space</div>
+
+<main class="deck" id="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide" data-name="Cover">
+    <div class="atom" aria-hidden="true">
+      <div class="orbit o1"><span class="e"></span></div>
+      <div class="orbit o2"><span class="e"></span></div>
+      <div class="orbit o3"><span class="e"></span></div>
+      <div class="nucleus"></div>
+    </div>
+    <div class="brandmark">◇ <b>MemAtom</b> — memory SDK</div>
+    <div class="slide-inner" style="position:relative; z-index:1;">
+      <div class="reveal kicker">Memory for AI agents</div>
+      <h1 class="reveal">Memory that<br>remembers<br><span class="accent">across every session.</span></h1>
+      <p class="reveal subtitle" style="margin-top:clamp(1rem,3vh,2rem); max-width:46ch;">
+        A drop-in SDK that turns your agent's conversations into structured, retrievable memory — with local embeddings and GraphRAG. No memory API. No vendor lock-in.
+      </p>
+      <div class="reveal accent-bar"></div>
+    </div>
+  </section>
+
+  <!-- 2 · PROBLEM -->
+  <section class="slide" data-name="Problem">
+    <div class="ghost-num">01</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">The problem</div>
+      <h2 class="reveal">Your agent forgets <span class="accent">everything.</span></h2>
+      <div class="grid cols-3 stagger">
+        <div class="card"><span class="icon">🧠</span><h3>Context resets</h3><p>Every new session starts from zero. The model has no idea what happened yesterday.</p></div>
+        <div class="card"><span class="icon">📜</span><h3>Logs aren't memory</h3><p>Dumping raw chat history into the prompt doesn't scale, isn't typed, and can't be searched.</p></div>
+        <div class="card"><span class="icon">🔌</span><h3>Bolt-on, brittle</h3><p>Hosted "memory" features lock you in, hide provenance, and offer no way to forget.</p></div>
+      </div>
+      <p class="reveal lead muted" style="margin-top:var(--content-gap);">Memory isn't a longer context window. It's a <b style="color:var(--ink)">system</b>.</p>
+    </div>
+  </section>
+
+  <!-- 3 · WHAT IT IS -->
+  <section class="slide" data-name="What">
+    <div class="ghost-num">02</div>
+    <div class="slide-inner two-col">
+      <div>
+        <div class="reveal kicker">What it is</div>
+        <h2 class="reveal">A memory <span class="accent">system</span>,<br>not a string list.</h2>
+        <p class="reveal lead">MemAtom distills each conversation turn into structured <b style="color:#fff">memory atoms</b> — typed, embedded, and provenance-tracked — then surfaces the right ones into your agent's next prompt.</p>
+        <ul class="bullets stagger" style="margin-top:1rem;">
+          <li><b>Typed:</b> episode · fact · preference · trait · skill</li>
+          <li><b>Provenance:</b> every atom knows which messages produced it</li>
+          <li><b>Recallable:</b> hybrid GraphRAG retrieval across all sessions</li>
+        </ul>
+      </div>
+      <div class="reveal card hot" style="align-self:stretch; display:flex; flex-direction:column; justify-content:center; gap:.6rem;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:var(--small-size); opacity:.85;">memory atom</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:var(--h3-size); line-height:1.1;">"User prefers terse,<br>urgency-first replies."</div>
+        <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.4rem;">
+          <span class="tag" style="color:#fff; border-color:rgba(255,255,255,.5);">preference</span>
+          <span class="tag" style="color:#fff; border-color:rgba(255,255,255,.5);">salience 0.5</span>
+          <span class="tag" style="color:#fff; border-color:rgba(255,255,255,.5);">#tone</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · MENTAL MODEL -->
+  <section class="slide" data-name="Pipeline">
+    <div class="ghost-num">03</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">The 30-second model</div>
+      <h2 class="reveal">Recall before. Capture after.</h2>
+      <div class="reveal pipe">
+        <div class="node">You<br><b>message</b></div>
+        <span class="arrow">→</span>
+        <div class="node accent-node">Recall<br><b>GraphRAG</b></div>
+        <span class="arrow">→</span>
+        <div class="node">Inject + <b>LLM reply</b></div>
+        <span class="arrow">→</span>
+        <div class="node accent-node">Capture<br><b>new atoms</b></div>
+      </div>
+      <p class="reveal lead muted" style="margin-top:var(--content-gap); max-width:64ch;">
+        Before generating, MemAtom recalls relevant atoms and injects them into context. After replying, it extracts new atoms <b style="color:var(--ink)">asynchronously — off the hot path</b>, so memory never adds latency to the response.
+      </p>
+    </div>
+  </section>
+
+  <!-- 5 · DROP IN -->
+  <section class="slide" data-name="Integration">
+    <div class="ghost-num">04</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">Fits any agentic system</div>
+      <h2 class="reveal">Two calls. Any agent loop.</h2>
+      <div class="reveal code">
+        <div class="winbar"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></div>
+<pre><span class="tok-key">import</span> { <span class="tok-fn">createMemory</span> } <span class="tok-key">from</span> <span class="tok-str">'@mematom/memory-sdk'</span>
+
+<span class="tok-key">const</span> mem = <span class="tok-fn">createMemory</span>({ embedder, extractor, repository, agentId })
+
+<span class="tok-com">// …inside YOUR agent loop, whatever framework:</span>
+<span class="tok-key">const</span> memories = <span class="tok-key">await</span> mem.<span class="tok-fn">recall</span>(userMessage)        <span class="tok-com">// vector + graph</span>
+<span class="tok-key">const</span> reply = <span class="tok-key">await</span> <span class="tok-fn">llm</span>(<span class="tok-fn">withContext</span>(memories, userMessage))
+<span class="tok-key">await</span> mem.<span class="tok-fn">capture</span>({ userText: userMessage, assistantText: reply })</pre>
+      </div>
+      <p class="reveal lead muted" style="margin-top:var(--content-gap);">No framework assumptions. Works with LangChain, custom loops, multi-agent orchestrators — anything that calls an LLM.</p>
+    </div>
+  </section>
+
+  <!-- 6 · GRAPHRAG -->
+  <section class="slide" data-name="GraphRAG">
+    <div class="ghost-num">05</div>
+    <div class="slide-inner two-col">
+      <div>
+        <div class="reveal kicker">Retrieval that doesn't miss</div>
+        <h2 class="reveal"><span class="accent">GraphRAG</span> recall</h2>
+        <p class="reveal lead">Two paths run together and fuse — so you catch what pure vector search misses.</p>
+        <ul class="bullets stagger" style="margin-top:1rem;">
+          <li><b>Vector:</b> semantic similarity over a pgvector index</li>
+          <li><b>Graph:</b> entities in the query → 1–2 hop traversal of a knowledge graph</li>
+          <li><b>Fused + reranked</b> by vector · graph · recency · pin</li>
+        </ul>
+      </div>
+      <div class="reveal grid" style="gap:.7rem;">
+        <div class="card"><h3 style="color:var(--cyan)">▢ Vector path</h3><p>"that thing I worried about last week" → semantic match by embedding.</p></div>
+        <div class="card"><h3 style="color:var(--accent)">◈ Graph path</h3><p>"everyone on Project Titan" → follow entity edges across atoms, even with zero text overlap.</p></div>
+        <div class="card hot"><h3>Every recall is explainable</h3><p>Atoms are tagged with the path that surfaced them — shown as V / G badges in the live view.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · LOCAL EMBEDDINGS -->
+  <section class="slide" data-name="LocalEmbeds">
+    <div class="ghost-num">06</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">No embeddings bill. No key.</div>
+      <h2 class="reveal">Embeddings run <span class="accent">locally.</span></h2>
+      <div class="grid cols-3 stagger">
+        <div class="card"><span class="icon">🔒</span><h3>Zero API key</h3><p><code>all-MiniLM-L6-v2</code> runs in-process via transformers.js. ~80MB, downloaded once.</p></div>
+        <div class="card"><span class="icon">💸</span><h3>Zero per-call cost</h3><p>No metered embedding endpoint. Embed millions of atoms for free, fully offline.</p></div>
+        <div class="card"><span class="icon">🔧</span><h3>Swap anytime</h3><p>Behind an <code>Embedder</code> interface — point it at a hosted model later with one line.</p></div>
+      </div>
+      <p class="reveal lead muted" style="margin-top:var(--content-gap);">Claude has no embeddings endpoint — that's the only reason a second provider ever enters the picture. Local models remove it entirely.</p>
+    </div>
+  </section>
+
+  <!-- 8 · SWAPPABLE -->
+  <section class="slide" data-name="Interfaces">
+    <div class="ghost-num">07</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">Bring your own everything</div>
+      <h2 class="reveal">Three interfaces. <span class="accent">Total control.</span></h2>
+      <div class="grid cols-3 stagger">
+        <div class="card"><h3 class="accent">Embedder</h3><p>Local MiniLM by default. Swap for OpenAI, Voyage, or any model.</p></div>
+        <div class="card"><h3 class="accent">LlmExtractor</h3><p>Anthropic tool-use included. Plug in any provider that returns structured output.</p></div>
+        <div class="card"><h3 class="accent">MemoryRepository</h3><p>Postgres + pgvector included. The seam for a CRDT / signed-ledger backend.</p></div>
+      </div>
+      <p class="reveal lead muted" style="margin-top:var(--content-gap);">Everything external is an interface — which is also why the whole SDK is unit-tested with deterministic fakes (zero network, zero flake).</p>
+    </div>
+  </section>
+
+  <!-- 9 · CROSS SESSION -->
+  <section class="slide" data-name="CrossSession">
+    <div class="ghost-num">08</div>
+    <div class="slide-inner two-col">
+      <div>
+        <div class="reveal kicker">The payoff</div>
+        <h2 class="reveal">It remembers in a <span class="accent">new session.</span></h2>
+        <p class="reveal lead">Atoms are scoped to the agent, not the chat thread — so memory carries across conversations, days apart.</p>
+        <div class="reveal accent-bar"></div>
+      </div>
+      <div class="reveal code" style="align-self:stretch;">
+        <div class="winbar"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></div>
+<pre><span class="tok-com">// Monday, session #1</span>
+🧑 <span class="tok-str">"I'm allergic to peanuts and I live in Seattle."</span>
+🤖 <span class="tok-punct">Got it.</span>  <span class="tok-com">→ 2 atoms captured</span>
+
+<span class="tok-com">// Thursday, session #7 (brand new)</span>
+🧑 <span class="tok-str">"What am I allergic to and where do I live?"</span>
+🤖 <span class="tok-punct">Peanuts (allergic), Seattle (live).</span>
+   <span class="tok-com">↑ recalled: V+G, score 0.52 / 0.39</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 · WHY DIFFERENT -->
+  <section class="slide" data-name="Compare">
+    <div class="ghost-num">09</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">Why it's different</div>
+      <h2 class="reveal">More than a vector DB.</h2>
+      <table class="cmp reveal">
+        <thead><tr><th></th><th>Chatbot memory</th><th>MemAtom</th></tr></thead>
+        <tbody>
+          <tr><td>Unit of memory</td><td class="no">raw text blob</td><td class="yes"><b>typed atoms + provenance</b></td></tr>
+          <tr><td>Across sessions</td><td class="no">current thread only</td><td class="yes">agent-scoped, <b>persistent</b></td></tr>
+          <tr><td>Retrieval</td><td class="no">last N messages</td><td class="yes"><b>vector + graph</b>, reranked</td></tr>
+          <tr><td>Embeddings</td><td class="no">paid API</td><td class="yes"><b>local, no key</b></td></tr>
+          <tr><td>Forgetting + audit</td><td class="no">none</td><td class="yes">pin / forget + <b>op-log</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 11 · PRODUCTION -->
+  <section class="slide" data-name="Production">
+    <div class="ghost-num">10</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">Built like you'll ship it</div>
+      <h2 class="reveal">Production-shaped from day one.</h2>
+      <div class="grid cols-3 stagger">
+        <div class="card hot"><span class="icon">✅</span><h3>41 tests</h3><p>Unit + real-pgvector integration, incl. graph traversal &amp; graph-only recall.</p></div>
+        <div class="card"><span class="icon">🧾</span><h3>Append-only op-log</h3><p>Every memory mutation is audited — the seam for CRDT + signing later.</p></div>
+        <div class="card"><span class="icon">🛟</span><h3>Graceful degradation</h3><p>If recall fails, the turn still answers — with empty memory, never a 500.</p></div>
+        <div class="card"><span class="icon">⚡</span><h3>Off the hot path</h3><p>Extraction is async — memory never slows the user-facing reply.</p></div>
+        <div class="card"><span class="icon">🧩</span><h3>Many small modules</h3><p>Interface-first, &lt;400-line files, immutable data, validated boundaries.</p></div>
+        <div class="card"><span class="icon">📌</span><h3>User control</h3><p>Pin what matters, forget on request — with a tamper-evident trail.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 · QUICKSTART -->
+  <section class="slide" data-name="Quickstart">
+    <div class="ghost-num">11</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">Get going</div>
+      <h2 class="reveal">Running in <span class="accent">five minutes.</span></h2>
+      <div class="reveal code">
+        <div class="winbar"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></div>
+<pre><span class="tok-com"># 1 · install</span>
+npm i @mematom/memory-sdk
+
+<span class="tok-com"># 2 · bring a store (Postgres + pgvector)</span>
+docker compose up -d db  &amp;&amp;  npm run db:migrate
+
+<span class="tok-com"># 3 · wire it into your agent</span>
+<span class="tok-key">const</span> mem = <span class="tok-fn">createMemory</span>({ embedder, extractor, repository, agentId })</pre>
+      </div>
+      <p class="reveal lead muted" style="margin-top:var(--content-gap);">That's it. The embedder self-loads on boot; the repository handles the rest.</p>
+    </div>
+  </section>
+
+  <!-- 13 · ROADMAP -->
+  <section class="slide" data-name="Roadmap">
+    <div class="ghost-num">12</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">Where it's going</div>
+      <h2 class="reveal">A memory that <span class="accent">evolves.</span></h2>
+      <div class="grid cols-3 stagger">
+        <div class="card hot"><div class="tag" style="color:#fff;border-color:rgba(255,255,255,.6)">shipping</div><h3 style="margin-top:.6rem;">M1 · Core</h3><p>Atoms · local embeds · GraphRAG · live independent view.</p></div>
+        <div class="card"><div class="tag">next</div><h3 style="margin-top:.6rem;">M2 · Cognition</h3><p>Salience decay + eviction · consolidation "sleep cycle" (episodes → semantic).</p></div>
+        <div class="card"><div class="tag">later</div><h3 style="margin-top:.6rem;">M3 · Integrity</h3><p>CRDT ledger · Ed25519 signing · capability tokens.</p></div>
+      </div>
+      <p class="reveal lead muted" style="margin-top:var(--content-gap);">The schema and interfaces for all three already exist — each milestone slots in without a rewrite.</p>
+    </div>
+  </section>
+
+  <!-- 14 · CLOSE -->
+  <section class="slide" data-name="CTA">
+    <div class="atom" aria-hidden="true" style="opacity:.6">
+      <div class="orbit o1"><span class="e"></span></div>
+      <div class="orbit o2"><span class="e"></span></div>
+      <div class="nucleus"></div>
+    </div>
+    <div class="slide-inner" style="position:relative; z-index:1; text-align:center;">
+      <div class="reveal kicker" style="justify-content:center;">Give your agent a memory</div>
+      <h1 class="reveal" style="font-size:clamp(2rem,8vw,5.5rem);">MemAtom</h1>
+      <p class="reveal subtitle" style="margin:clamp(0.8rem,2vh,1.4rem) auto 0; max-width:40ch;">Per-message atoms · local embeddings · GraphRAG. Drop it into any agent.</p>
+      <div class="reveal" style="margin-top:clamp(1.2rem,3.5vh,2.4rem); display:flex; gap:.7rem; justify-content:center; flex-wrap:wrap;">
+        <span class="tag" style="font-size:var(--body-size); padding:.5em 1.2em;">npm i @mematom/memory-sdk</span>
+        <span class="tag" style="font-size:var(--body-size); padding:.5em 1.2em; color:#fff; border-color:var(--accent); background:var(--accent);">★ Star on GitHub</span>
+      </div>
+      <p class="reveal muted" style="margin-top:clamp(1rem,3vh,2rem); font-family:'JetBrains Mono',monospace; font-size:var(--small-size);">github.com/RajuRoopani/mematom</p>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function () {
+  "use strict";
+  const deck = document.getElementById('deck');
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const navDots = document.getElementById('navDots');
+  const curNum = document.getElementById('curNum');
+  const totNum = document.getElementById('totNum');
+  const progress = document.getElementById('progress');
+  let current = 0;
+  const pad = (n) => String(n + 1).padStart(2, '0');
+  totNum.textContent = slides.length;
+
+  // build nav dots
+  slides.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.setAttribute('aria-label', 'Go to slide ' + (i + 1) + (s.dataset.name ? ' — ' + s.dataset.name : ''));
+    b.addEventListener('click', () => go(i));
+    navDots.appendChild(b);
+  });
+  const dots = Array.from(navDots.children);
+
+  function setActive(i) {
+    current = i;
+    dots.forEach((d, k) => d.classList.toggle('active', k === i));
+    curNum.textContent = pad(i);
+    progress.style.width = ((i) / (slides.length - 1) * 100) + '%';
+  }
+  function go(i) {
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    slides[i].scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // reveal + active tracking via IntersectionObserver
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.intersectionRatio >= 0.55) {
+        en.target.classList.add('in');
+        setActive(slides.indexOf(en.target));
+      }
+    });
+  }, { threshold: [0, 0.55, 1] });
+  slides.forEach((s) => io.observe(s));
+
+  // keyboard
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); go(current + 1); }
+    else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); go(current - 1); }
+    else if (e.key === 'Home') { go(0); }
+    else if (e.key === 'End') { go(slides.length - 1); }
+  });
+
+  // wheel (debounced, snap one slide per gesture)
+  let wheelLock = false;
+  window.addEventListener('wheel', (e) => {
+    if (wheelLock) return;
+    if (Math.abs(e.deltaY) < 24) return;
+    wheelLock = true;
+    go(current + (e.deltaY > 0 ? 1 : -1));
+    setTimeout(() => { wheelLock = false; }, 720);
+  }, { passive: true });
+
+  // touch
+  let ty = null;
+  window.addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; }, { passive: true });
+  window.addEventListener('touchend', (e) => {
+    if (ty === null) return;
+    const dy = ty - e.changedTouches[0].clientY;
+    if (Math.abs(dy) > 50) go(current + (dy > 0 ? 1 : -1));
+    ty = null;
+  }, { passive: true });
+
+  setActive(0);
+  slides[0].classList.add('in');
+})();
+</script>
+</body>
+</html>
