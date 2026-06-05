@@ -169,6 +169,41 @@ p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-
 .pipe .node.accent-node { border-color: var(--accent); background: var(--accent-soft); }
 .pipe .arrow { color: var(--accent); font-size: clamp(1rem,2.2vw,1.5rem); }
 
+/* architecture diagram (slide) */
+.dk-arch{ display:flex; align-items:stretch; justify-content:center; gap:clamp(.35rem,1.4vw,1rem); margin-top:clamp(.6rem,2.2vh,1.5rem); }
+.dk-col{ display:flex; flex-direction:column; gap:.5rem; justify-content:center; }
+.dk-box{ border:1px solid var(--edge); background:linear-gradient(180deg,var(--panel),var(--bg2)); border-radius:12px; padding:clamp(.5rem,1.4vw,1rem) clamp(.6rem,1.7vw,1.2rem); text-align:center; }
+.dk-box .k{ font-size:clamp(.52rem,.95vw,.68rem); text-transform:uppercase; letter-spacing:.12em; color:var(--muted); display:block; margin-bottom:.2rem; }
+.dk-box .v{ font-size:clamp(.78rem,1.5vw,1.05rem); font-weight:600; color:#fff; line-height:1.25; }
+.dk-box.accent{ border-color:var(--accent); background:var(--accent-soft); }
+.dk-arr{ display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--accent); font-size:clamp(.85rem,1.7vw,1.25rem); min-width:clamp(26px,4vw,54px); line-height:1; }
+.dk-arr small{ font-size:clamp(.48rem,.85vw,.64rem); color:var(--muted); letter-spacing:.03em; margin-top:.15rem; }
+.dk-stores{ display:flex; flex-direction:column; gap:.45rem; }
+.dk-store{ border:1px solid var(--edge); border-left:3px solid var(--accent); border-radius:10px; padding:clamp(.4rem,1.1vw,.7rem) clamp(.55rem,1.3vw,.95rem); background:var(--panel); text-align:left; }
+.dk-store b{ font-size:clamp(.7rem,1.35vw,.95rem); color:#fff; }
+.dk-store span{ display:block; font-size:clamp(.52rem,.95vw,.72rem); color:var(--muted); }
+.dk-store.redis{ border-left-color:#e3564c; } .dk-store.pg{ border-left-color:var(--cyan); } .dk-store.graph{ border-left-color:var(--accent); }
+.dk-cap{ text-align:center; margin-top:clamp(.5rem,1.8vh,1.1rem); font-family:'JetBrains Mono',monospace; font-size:clamp(.58rem,1.05vw,.8rem); color:var(--muted); line-height:1.5; }
+.dk-cap b{ color:var(--accent); }
+/* stack only on narrow (portrait) screens */
+@media (max-width:560px){
+  .dk-arch{ flex-direction:column; align-items:stretch; gap:.4rem; }
+  .dk-arr{ transform:rotate(90deg); min-width:0; }
+  .dk-stores{ flex-direction:row; }
+  .dk-store{ flex:1; }
+}
+/* landscape / short height: keep horizontal, compress to fit */
+@media (max-height:540px) and (min-width:561px){
+  .dk-arch{ gap:.3rem; margin-top:.4rem; }
+  .dk-box{ padding:.4rem .55rem; }
+  .dk-box .v{ font-size:clamp(.68rem,1.35vw,.92rem); }
+  .dk-store{ padding:.3rem .5rem; }
+  .dk-store b{ font-size:clamp(.66rem,1.25vw,.85rem); }
+  .dk-store span{ font-size:clamp(.5rem,.9vw,.64rem); }
+  .dk-stores{ gap:.32rem; }
+  .dk-cap{ margin-top:.4rem; }
+}
+
 /* atom motif (title) */
 .atom { position:absolute; inset:0; z-index:0; pointer-events:none; opacity:0.9; }
 .atom .nucleus { position:absolute; top:50%; left:50%; width: clamp(10px,1.6vw,18px); height:clamp(10px,1.6vw,18px); margin:-9px 0 0 -9px; border-radius:50%; background: var(--accent); box-shadow: 0 0 30px 6px rgba(227,111,76,0.5); }
@@ -377,9 +412,34 @@ p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-
     </div>
   </section>
 
+  <!-- · ARCHITECTURE -->
+  <section class="slide" data-name="Architecture">
+    <div class="ghost-num">05</div>
+    <div class="slide-inner">
+      <div class="reveal kicker">Drop-in architecture</div>
+      <h2 class="reveal">Sits between your agent &amp; your stores.</h2>
+      <div class="reveal dk-arch">
+        <div class="dk-col">
+          <div class="dk-box"><span class="k">Your agent</span><span class="v">runtime + LLM</span></div>
+        </div>
+        <div class="dk-arr"><span>▶</span><small>recall</small><small>◀ inject</small></div>
+        <div class="dk-col">
+          <div class="dk-box accent"><span class="k">MemAtom · orchestrator</span><span class="v">vector ‖ graph<br>→ rerank → top-K</span></div>
+        </div>
+        <div class="dk-arr"><span>▶</span><small>retrieve</small><small>◀ atoms</small></div>
+        <div class="dk-col dk-stores">
+          <div class="dk-store redis"><b>⚡ Redis</b><span>hot tier · &lt;1 ms</span></div>
+          <div class="dk-store pg"><b>▦ Postgres + pgvector</b><span>source of truth</span></div>
+          <div class="dk-store graph"><b>◈ Knowledge graph</b><span>per-entity</span></div>
+        </div>
+      </div>
+      <div class="reveal dk-cap"><b>recall()</b> retrieves &amp; injects the right memories · <b>capture()</b> writes new atoms back — async, off the hot path</div>
+    </div>
+  </section>
+
   <!-- 6 · GRAPHRAG -->
   <section class="slide" data-name="GraphRAG">
-    <div class="ghost-num">05</div>
+    <div class="ghost-num">06</div>
     <div class="slide-inner two-col">
       <div>
         <div class="reveal kicker">Retrieval that doesn't miss</div>
@@ -401,7 +461,7 @@ p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-
 
   <!-- 7 · LOCAL EMBEDDINGS -->
   <section class="slide" data-name="LocalEmbeds">
-    <div class="ghost-num">06</div>
+    <div class="ghost-num">07</div>
     <div class="slide-inner">
       <div class="reveal kicker">No embeddings bill. No key.</div>
       <h2 class="reveal">Embeddings run <span class="accent">locally.</span></h2>
@@ -416,7 +476,7 @@ p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-
 
   <!-- 8 · SWAPPABLE -->
   <section class="slide" data-name="Interfaces">
-    <div class="ghost-num">07</div>
+    <div class="ghost-num">08</div>
     <div class="slide-inner">
       <div class="reveal kicker">Bring your own everything</div>
       <h2 class="reveal">Three interfaces. <span class="accent">Total control.</span></h2>
@@ -431,7 +491,7 @@ p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-
 
   <!-- 9 · CROSS SESSION -->
   <section class="slide" data-name="CrossSession">
-    <div class="ghost-num">08</div>
+    <div class="ghost-num">09</div>
     <div class="slide-inner two-col">
       <div>
         <div class="reveal kicker">The payoff</div>
@@ -455,7 +515,7 @@ p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-
 
   <!-- 10 · WHY DIFFERENT -->
   <section class="slide" data-name="Compare">
-    <div class="ghost-num">09</div>
+    <div class="ghost-num">10</div>
     <div class="slide-inner">
       <div class="reveal kicker">Why it's different</div>
       <h2 class="reveal">More than a vector DB.</h2>
@@ -474,7 +534,7 @@ p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-
 
   <!-- 11 · PRODUCTION -->
   <section class="slide" data-name="Production">
-    <div class="ghost-num">10</div>
+    <div class="ghost-num">11</div>
     <div class="slide-inner">
       <div class="reveal kicker">Built like you'll ship it</div>
       <h2 class="reveal">Production-shaped from day one.</h2>
@@ -491,7 +551,7 @@ p.lead { font-size: var(--body-size); color: var(--ink); line-height: 1.55; max-
 
   <!-- 12 · QUICKSTART -->
   <section class="slide" data-name="Quickstart">
-    <div class="ghost-num">11</div>
+    <div class="ghost-num">12</div>
     <div class="slide-inner">
       <div class="reveal kicker">Get going</div>
       <h2 class="reveal">Running in <span class="accent">five minutes.</span></h2>
@@ -512,7 +572,7 @@ docker compose up -d db  &amp;&amp;  npm run db:migrate
 
   <!-- 13 · ROADMAP -->
   <section class="slide" data-name="Roadmap">
-    <div class="ghost-num">12</div>
+    <div class="ghost-num">13</div>
     <div class="slide-inner">
       <div class="reveal kicker">Where it's going</div>
       <h2 class="reveal">A memory that <span class="accent">evolves.</span></h2>
