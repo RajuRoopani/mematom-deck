@@ -187,6 +187,24 @@ td:first-child code{ color:var(--accent); }
   .arch-sub .arch-arrow,.arch-op{ transform:rotate(90deg); align-self:center; }
 }
 
+/* ---------- feature cards + mini-flows (M2 / M3 design) ---------- */
+.feat{ display:grid; gap:.8rem; margin:1.1rem 0; }
+.feat.c2{ grid-template-columns:repeat(2,1fr); }
+.feat.c3{ grid-template-columns:repeat(3,1fr); }
+.feat .f{ border:1px solid var(--edge); border-top:3px solid var(--accent); border-radius:12px; padding:.95rem 1rem; background:var(--panel); }
+.feat .f .ic{ font-size:1.2rem; display:block; margin-bottom:.3rem; line-height:1; }
+.feat .f h4{ font-size:.96rem; color:#fff; margin:0 0 .25rem; }
+.feat .f p{ font-size:.81rem; color:var(--muted); margin:.3rem 0 0; line-height:1.45; }
+.feat .f code{ font-size:.73rem; }
+.miniflow{ display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; margin:.9rem 0; }
+.mf{ background:var(--bg2); border:1px solid var(--edge); border-radius:9px; padding:.42rem .7rem; font-size:.82rem; color:#eef0f4; display:flex; flex-direction:column; line-height:1.2; }
+.mf small{ color:var(--faint); font-size:.62rem; margin-top:.12rem; }
+.mf.accent{ border-color:var(--accent); }
+.mf.solid{ background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+.mf.dim{ opacity:.6; }
+.mf-arr{ color:var(--accent); font-family:'JetBrains Mono',monospace; }
+@media (max-width:760px){ .feat.c2,.feat.c3{ grid-template-columns:1fr; } }
+
 footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem; color:var(--faint); font-size:.85rem; }
 
 /* ---------- responsive ---------- */
@@ -223,6 +241,8 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
     <a href="#architecture">System design</a>
     <a href="#scopes">Memory scopes</a>
     <a href="#redis">Hot tier · Redis</a>
+    <a href="#cognition">Cognition · M2</a>
+    <a href="#integrity">Integrity · M3</a>
     <h4>Start</h4>
     <a href="#overview">Overview</a>
     <a href="#install">Install</a>
@@ -380,6 +400,41 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
 )
 <span class="tok-fn">createMemory</span>({ embedder, extractor, repository, agentId })</code></pre></div>
     <div class="note tip"><b>Why it matters:</b> keeps p99 recall well under the 200&nbsp;ms budget and turns the read-heavy hot path into Redis traffic — Postgres handles writes and cold misses only.</div>
+
+    <h2 id="cognition">Cognition <span class="pill opt">M2</span> <a class="hash" href="#cognition">#</a></h2>
+    <p>Retrieval makes the agent useful today. <b>Cognition</b> makes its memory <i>mature</i> — pruning what's stale and distilling raw events into durable beliefs. Two background processes run over the same stores, off the hot path.</p>
+
+    <h3>Salience decay + eviction</h3>
+    <p>Every atom carries a <code>salience</code> score blended from recency, access frequency, reinforcement, and graph connectivity — minus staleness (pinned atoms clamp to 1.0). A periodic sweep recomputes it and moves atoms across tiers, bounding storage and keeping recall focused on what matters:</p>
+    <div class="miniflow">
+      <span class="mf accent">warm<small>&gt; 0.6 · hot set</small></span>
+      <span class="mf-arr">→</span>
+      <span class="mf">cold<small>0.2–0.6 · summarized</small></span>
+      <span class="mf-arr">→</span>
+      <span class="mf dim">tombstoned<small>&lt; 0.2 · evicted</small></span>
+    </div>
+    <p class="muted">Pinned atoms skip eviction entirely. Every transition is an auditable op — <i>"forgot X on May 23 because salience dropped to 0.18."</i></p>
+
+    <h3>Consolidation — the "sleep cycle"</h3>
+    <p>On a schedule (per agent), a job clusters similar <b>episodic</b> atoms by embedding (DBSCAN / HDBSCAN). Cohesive clusters — ≥&nbsp;3 sources, above a cohesion gate — are promoted into a higher-order <b>semantic</b> atom (<code>fact</code> / <code>preference</code> / <code>trait</code>) with <code>derivedFrom</code> provenance back to the episodes:</p>
+    <div class="miniflow">
+      <span class="mf">episode</span><span class="mf">episode</span><span class="mf">episode</span>
+      <span class="mf-arr">→</span>
+      <span class="mf">cluster</span>
+      <span class="mf-arr">→</span>
+      <span class="mf solid">semantic atom</span>
+    </div>
+    <p class="muted">This is how an agent's "character" forms: scattered events become a stable belief — behind a confidence gate, so one-off noise is never promoted as fact.</p>
+    <div class="note"><b>Plugs in via:</b> the existing <code>salience</code> + <code>status</code> columns and <code>derivedFrom</code> links, driven by the <code>SalienceScorer</code> and <code>ConsolidationEngine</code> interfaces (stubbed in M1).</div>
+
+    <h2 id="integrity">Integrity <span class="pill opt">M3</span> <a class="hash" href="#integrity">#</a></h2>
+    <p>Once multiple writers — the user, the agent, its sub-agents — touch the same memory, and once that memory drives real decisions, you need <b>trust</b>: who wrote what, on what evidence, and who's allowed to. Three layers, all hanging off the append-only <code>memory_ops</code> log:</p>
+    <div class="feat c3">
+      <div class="f"><span class="ic">🧬</span><h4>CRDT ledger</h4><p>Mutations become CRDT ops that merge deterministically — concurrent writers never conflict, and both sides of a conflict stay in history. Replaces last-write-wins.</p></div>
+      <div class="f"><span class="ic">🔏</span><h4>Ed25519 op signing</h4><p>Every op is signed by its writer's key, so any reader can verify provenance and detect tampering. Ed25519 — ~30× faster than RSA at equivalent security.</p></div>
+      <div class="f"><span class="ic">🎟️</span><h4>Capability tokens</h4><p>Short-lived, scoped JWTs gate each read/write (e.g. <code>read:warm.preferences</code> for 900&nbsp;s). Zero-trust; expired or revoked tokens fail closed. Replaces static ACLs.</p></div>
+    </div>
+    <div class="note"><b>Why it's a clean seam:</b> <code>memory_ops</code> already records every mutation in M1 (with a null <code>signature</code> column) — M3 fills in CRDT merge, signatures, and capability checks without touching the read path.</div>
 
     <h2 id="overview">Overview <a class="hash" href="#overview">#</a></h2>
     <p>MemAtom sits beside your LLM. Before generating, it <b>recalls</b> the most relevant memories and you inject them into context. After replying, it <b>captures</b> new memories from the turn — asynchronously, off the hot path. Memory is scoped to an <code>agentId</code>, not a chat thread, so it persists across sessions.</p>
