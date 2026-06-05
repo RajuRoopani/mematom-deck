@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MemAtom · Developer Docs</title>
+<meta name="description" content="Developer documentation for @mematom/memory-sdk — a drop-in memory SDK for AI agents: createMemory, recall, capture, interfaces, and GraphRAG." />
+<meta property="og:title" content="MemAtom · Developer Docs" />
+<meta property="og:description" content="API reference + integration guide for the MemAtom memory SDK — drop it into any AI agent." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://rajuroopani.github.io/mematom-deck/docs/" />
+<meta property="og:image" content="https://rajuroopani.github.io/mematom-deck/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://rajuroopani.github.io/mematom-deck/og-image.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root{
+  --bg:#0e1016; --bg2:#14171f; --panel:#181c26; --code:#0b0d13;
+  --edge:#283040; --ink:#f5f6f8; --muted:#9097a6; --faint:#6a7185;
+  --accent:#e36f4c; --accent-2:#f4a07c; --accent-soft:rgba(227,111,76,.12);
+  --green:#5ec98a; --cyan:#5ec7d6; --violet:#b69bff;
+  --sidebar-w: 264px; --topbar-h: 58px; --maxw: 860px;
+}
+html{ scroll-behavior:smooth; scroll-padding-top: calc(var(--topbar-h) + 16px); }
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'Space Grotesk',system-ui,sans-serif; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a{ color:var(--accent-2); text-decoration:none; }
+a:hover{ text-decoration:underline; }
+code{ font-family:'JetBrains Mono',monospace; font-size:.88em; }
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky; top:0; z-index:40; height:var(--topbar-h);
+  display:flex; align-items:center; gap:1rem;
+  padding:0 clamp(1rem,3vw,2rem);
+  background:rgba(14,16,22,.86); backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--edge);
+}
+.topbar .brand{ font-family:'JetBrains Mono',monospace; font-weight:700; letter-spacing:.04em; color:var(--ink); }
+.topbar .brand b{ color:var(--accent); }
+.topbar .brand span{ color:var(--faint); font-weight:400; }
+.topbar nav{ margin-left:auto; display:flex; gap:1.2rem; align-items:center; font-size:.9rem; }
+.topbar nav a{ color:var(--muted); }
+.topbar nav a:hover{ color:var(--ink); text-decoration:none; }
+.topbar .ghbtn{ border:1px solid var(--accent); color:var(--accent); border-radius:8px; padding:.3em .8em; }
+.menu-toggle{ display:none; background:none; border:1px solid var(--edge); color:var(--ink); border-radius:8px; padding:.3em .6em; cursor:pointer; font-size:1rem; }
+
+/* ---------- layout ---------- */
+.layout{ display:grid; grid-template-columns: var(--sidebar-w) 1fr; align-items:start; }
+.sidebar{
+  position:sticky; top:var(--topbar-h); align-self:start;
+  height:calc(100vh - var(--topbar-h)); overflow-y:auto;
+  border-right:1px solid var(--edge); padding:1.6rem 1rem 3rem 1.4rem;
+}
+.sidebar h4{ font-size:.72rem; text-transform:uppercase; letter-spacing:.16em; color:var(--faint); margin:1.4rem 0 .5rem; font-weight:700; }
+.sidebar h4:first-child{ margin-top:0; }
+.sidebar a{ display:block; color:var(--muted); font-size:.9rem; padding:.28rem 0 .28rem .7rem; border-left:2px solid transparent; }
+.sidebar a:hover{ color:var(--ink); text-decoration:none; }
+.sidebar a.active{ color:var(--accent); border-left-color:var(--accent); }
+
+main{ min-width:0; padding: clamp(1.6rem,4vw,3.2rem) clamp(1.2rem,4vw,3.5rem); }
+.doc{ max-width:var(--maxw); }
+
+/* ---------- typography ---------- */
+.hero-tag{ display:inline-flex; align-items:center; gap:.5rem; font-size:.78rem; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); font-weight:600; }
+.hero-tag::before{ content:""; width:26px; height:2px; background:var(--accent); }
+h1{ font-family:'Archivo Black',sans-serif; font-weight:400; font-size:clamp(2rem,5vw,3.1rem); line-height:1.04; letter-spacing:-.02em; margin:.6rem 0 .5rem; }
+.lead{ font-size:1.12rem; color:var(--muted); max-width:62ch; }
+h2{ font-family:'Archivo Black',sans-serif; font-weight:400; font-size:clamp(1.35rem,3vw,1.9rem); letter-spacing:-.015em; margin:2.8rem 0 .8rem; padding-top:.4rem; scroll-margin-top: calc(var(--topbar-h) + 12px); }
+h3{ font-size:1.15rem; font-weight:700; margin:1.8rem 0 .5rem; color:#fff; scroll-margin-top: calc(var(--topbar-h) + 12px); }
+h2 .hash, h3 .hash{ color:var(--faint); opacity:0; margin-left:.4rem; font-family:'JetBrains Mono',monospace; font-size:.7em; }
+h2:hover .hash, h3:hover .hash{ opacity:1; }
+p{ margin:.7rem 0; color:#d7dae2; }
+p.muted{ color:var(--muted); }
+ul,ol{ margin:.6rem 0 .6rem 1.2rem; color:#d7dae2; }
+li{ margin:.3rem 0; }
+hr{ border:none; border-top:1px solid var(--edge); margin:2.4rem 0; }
+.rule{ height:4px; width:120px; background:var(--accent); border-radius:4px; margin:1rem 0 0; }
+
+/* ---------- code ---------- */
+.codewrap{ position:relative; margin:1rem 0; }
+pre{
+  background:var(--code); border:1px solid var(--edge); border-radius:12px;
+  padding:1rem 1.1rem; overflow-x:auto; font-family:'JetBrains Mono',monospace;
+  font-size:.84rem; line-height:1.65;
+}
+pre code{ font-size:inherit; }
+.copy-btn{
+  position:absolute; top:.5rem; right:.5rem; background:var(--panel); color:var(--muted);
+  border:1px solid var(--edge); border-radius:7px; font-size:.72rem; padding:.25em .6em;
+  cursor:pointer; font-family:'JetBrains Mono',monospace; opacity:0; transition:opacity .2s;
+}
+.codewrap:hover .copy-btn{ opacity:1; }
+.copy-btn:hover{ color:var(--ink); border-color:var(--accent); }
+p code, li code, td code{ background:var(--panel); border:1px solid var(--edge); border-radius:5px; padding:.08em .4em; color:var(--accent-2); }
+.tok-key{color:#e3a06f}.tok-fn{color:var(--cyan)}.tok-str{color:var(--green)}.tok-com{color:#5b6478;font-style:italic}.tok-num{color:var(--violet)}.tok-punct{color:#9097a6}.tok-type{color:var(--violet)}
+
+/* ---------- tables ---------- */
+.tablewrap{ overflow-x:auto; margin:1rem 0; }
+table{ width:100%; border-collapse:collapse; font-size:.86rem; }
+th,td{ text-align:left; padding:.55rem .8rem; border-bottom:1px solid var(--edge); vertical-align:top; }
+th{ color:var(--faint); text-transform:uppercase; letter-spacing:.06em; font-size:.72rem; font-weight:700; }
+td code{ white-space:nowrap; }
+td:first-child code{ color:var(--accent); }
+
+/* ---------- callouts ---------- */
+.note{ border:1px solid var(--edge); border-left:3px solid var(--accent); background:var(--accent-soft);
+  border-radius:10px; padding:.8rem 1rem; margin:1.1rem 0; font-size:.92rem; color:#e7e9ee; }
+.note b{ color:var(--accent); }
+.note.tip{ border-left-color:var(--green); } .note.tip b{ color:var(--green); }
+
+.pill{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:.72rem; padding:.12em .6em; border-radius:999px; border:1px solid var(--edge); color:var(--muted); }
+.pill.req{ color:var(--accent); border-color:var(--accent); }
+.pill.opt{ color:var(--faint); }
+
+footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem; color:var(--faint); font-size:.85rem; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px){
+  .layout{ grid-template-columns:1fr; }
+  .menu-toggle{ display:inline-block; }
+  .sidebar{
+    position:fixed; top:var(--topbar-h); left:0; width:min(80vw,300px);
+    height:calc(100vh - var(--topbar-h)); background:var(--bg2); z-index:35;
+    transform:translateX(-105%); transition:transform .25s ease;
+    border-right:1px solid var(--edge);
+  }
+  .sidebar.open{ transform:none; }
+  .topbar nav .hidem{ display:none; }
+}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} .sidebar{transition:none;} }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+  <div class="brand">◇ <b>MemAtom</b> <span>· docs</span></div>
+  <nav>
+    <a class="hidem" href="https://rajuroopani.github.io/mematom-deck/">Deck</a>
+    <a href="https://github.com/RajuRoopani/mematom" target="_blank" rel="noopener" class="ghbtn">GitHub ★</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <h4>Start</h4>
+    <a href="#overview">Overview</a>
+    <a href="#install">Install</a>
+    <a href="#quickstart">Quickstart</a>
+    <h4>Concepts</h4>
+    <a href="#memory-atom">The memory atom</a>
+    <a href="#loop">Recall &amp; capture</a>
+    <a href="#graphrag">GraphRAG retrieval</a>
+    <h4>API reference</h4>
+    <a href="#creatememory">createMemory()</a>
+    <a href="#recall">.recall()</a>
+    <a href="#capture">.capture()</a>
+    <a href="#types">Core types</a>
+    <a href="#interfaces">Interfaces</a>
+    <h4>Guides</h4>
+    <a href="#config">Configuration</a>
+    <a href="#recipes">Recipes</a>
+    <a href="#lifecycle">Pin &amp; forget</a>
+    <a href="#testing">Testing</a>
+    <a href="#roadmap">Roadmap</a>
+  </aside>
+
+  <main>
+  <article class="doc">
+
+    <span class="hero-tag">@mematom/memory-sdk</span>
+    <h1>Developer documentation</h1>
+    <p class="lead">A drop-in memory SDK that turns your agent's conversations into structured, retrievable memory — per-message <b>memory atoms</b>, local embeddings (no API key), and <b>GraphRAG</b> recall. Framework-agnostic: two calls fit into any agent loop.</p>
+    <div class="rule"></div>
+
+    <h2 id="overview">Overview <a class="hash" href="#overview">#</a></h2>
+    <p>MemAtom sits beside your LLM. Before generating, it <b>recalls</b> the most relevant memories and you inject them into context. After replying, it <b>captures</b> new memories from the turn — asynchronously, off the hot path. Memory is scoped to an <code>agentId</code>, not a chat thread, so it persists across sessions.</p>
+    <ul>
+      <li><b>Typed atoms</b> with provenance — <code>episode · fact · preference · trait · skill</code></li>
+      <li><b>Hybrid recall</b> — vector similarity <i>and</i> knowledge-graph traversal, reranked</li>
+      <li><b>Local embeddings</b> — <code>all-MiniLM-L6-v2</code>, no key, fully offline</li>
+      <li><b>Swappable everything</b> — <code>Embedder</code>, <code>LlmExtractor</code>, <code>MemoryRepository</code> are interfaces</li>
+    </ul>
+
+    <h2 id="install">Install <a class="hash" href="#install">#</a></h2>
+    <div class="codewrap"><pre><code>npm i @mematom/memory-sdk</code></pre></div>
+    <p class="muted">Peer requirements: Node ≥ 20, and a vector-capable store (Postgres + <code>pgvector</code> is included). The default embedder downloads a ~80&nbsp;MB model on first use, then caches it.</p>
+
+    <h2 id="quickstart">Quickstart <a class="hash" href="#quickstart">#</a></h2>
+    <p>Wire the SDK once, then make two calls inside whatever agent loop you already have.</p>
+    <div class="codewrap"><pre><code><span class="tok-key">import</span> {
+  <span class="tok-fn">createMemory</span>,
+  <span class="tok-fn">LocalEmbedder</span>,
+  <span class="tok-fn">PostgresMemoryRepository</span>,
+} <span class="tok-key">from</span> <span class="tok-str">'@mematom/memory-sdk'</span>
+
+<span class="tok-key">const</span> embedder = <span class="tok-key">new</span> <span class="tok-fn">LocalEmbedder</span>()       <span class="tok-com">// local MiniLM, no API key</span>
+<span class="tok-key">await</span> embedder.<span class="tok-fn">init</span>()                    <span class="tok-com">// load model up front (fail fast)</span>
+
+<span class="tok-key">const</span> mem = <span class="tok-fn">createMemory</span>({
+  embedder,
+  extractor,                          <span class="tok-com">// your LlmExtractor (Claude / OpenAI / …)</span>
+  repository: <span class="tok-key">new</span> <span class="tok-fn">PostgresMemoryRepository</span>(pool),
+  agentId: <span class="tok-str">'assistant'</span>,
+})
+
+<span class="tok-com">// ── inside YOUR agent loop ─────────────────────────────</span>
+<span class="tok-key">const</span> memories = <span class="tok-key">await</span> mem.<span class="tok-fn">recall</span>(userMessage)          <span class="tok-com">// RecalledAtom[]</span>
+<span class="tok-key">const</span> reply = <span class="tok-key">await</span> <span class="tok-fn">llm</span>(<span class="tok-fn">buildPrompt</span>(memories, userMessage))
+<span class="tok-key">await</span> mem.<span class="tok-fn">capture</span>({                                <span class="tok-com">// fire-and-forget after replying</span>
+  sessionId, userMessageId, assistantMessageId,
+  userText: userMessage,
+  assistantText: reply,
+})</code></pre></div>
+    <div class="note tip"><b>Tip:</b> run <code>capture()</code> <i>after</i> you've sent the reply (don't <code>await</code> it on the hot path). Extraction makes its own LLM call, so keeping it off the response path means memory never adds latency.</div>
+
+    <h2 id="memory-atom">The memory atom <a class="hash" href="#memory-atom">#</a></h2>
+    <p>Every memory is one structured record. Recall returns these enriched with scoring (<a href="#types">RecalledAtom</a>).</p>
+    <div class="codewrap"><pre><code>{
+  id: <span class="tok-str">"9f3b…"</span>,
+  agentId: <span class="tok-str">"assistant"</span>,
+  type: <span class="tok-str">"preference"</span>,              <span class="tok-com">// episode|fact|preference|trait|skill</span>
+  content: <span class="tok-str">"User prefers terse, urgency-first replies."</span>,
+  entities: [<span class="tok-str">"tone"</span>],             <span class="tok-com">// graph nodes</span>
+  evidence: [<span class="tok-str">"msg_a"</span>, <span class="tok-str">"msg_b"</span>],   <span class="tok-com">// messages it was distilled from</span>
+  salience: <span class="tok-num">0.5</span>,                  <span class="tok-com">// drives eviction (M2)</span>
+  pinned: <span class="tok-key">false</span>,                 <span class="tok-com">// user "tattoo" → never forgotten</span>
+  status: <span class="tok-str">"warm"</span>,               <span class="tok-com">// warm|cold|tombstoned</span>
+  author: { type: <span class="tok-str">"agent"</span>, id: <span class="tok-str">"assistant"</span> },
+}</code></pre></div>
+
+    <h2 id="loop">Recall &amp; capture <a class="hash" href="#loop">#</a></h2>
+    <p>The two verbs that make up the loop:</p>
+    <ul>
+      <li><b><code>recall(query)</code></b> — embed the query, run vector + graph retrieval, rerank, return the top‑K atoms to inject into your prompt.</li>
+      <li><b><code>capture(turn)</code></b> — ask the extractor for atom proposals, embed each, drop near-duplicates, persist the rest (and append an audit op).</li>
+    </ul>
+    <div class="note"><b>Graceful by design:</b> if recall fails, it returns <code>[]</code> rather than throwing — your turn still answers, just without memory. If capture fails, the reply already happened, so nothing user-facing breaks.</div>
+
+    <h2 id="graphrag">GraphRAG retrieval <a class="hash" href="#graphrag">#</a></h2>
+    <p>Recall runs two independent paths and fuses them, so you catch what pure vector search misses:</p>
+    <ul>
+      <li><b>Vector</b> — semantic similarity over the embedding index (<code>pgvector</code>, cosine).</li>
+      <li><b>Graph</b> — entities mentioned in the query are matched against a knowledge graph (<code>entities</code> nodes, <code>atom_entities</code> edges) and traversed 1–2 hops.</li>
+      <li><b>Rerank</b> — the union is scored by a weighted blend of <code>vector · graph · recency · pin</code>.</li>
+    </ul>
+    <p>Each returned atom carries a <code>sources</code> array (<code>"vector"</code> / <code>"graph"</code>) so every recall is explainable. Set <code>enableGraph: false</code> for vector-only retrieval.</p>
+
+    <h2 id="creatememory">createMemory(config) <a class="hash" href="#creatememory">#</a></h2>
+    <p>Builds a <code>Memory</code> façade wired with your dependencies. Returns <code>{ recall, capture, repository, embedder }</code>.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Option</th><th>Type</th><th></th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>embedder</code></td><td><code>Embedder</code></td><td><span class="pill req">req</span></td><td>—</td><td>Turns text into vectors.</td></tr>
+        <tr><td><code>extractor</code></td><td><code>LlmExtractor</code></td><td><span class="pill req">req</span></td><td>—</td><td>Proposes atoms from a turn.</td></tr>
+        <tr><td><code>repository</code></td><td><code>MemoryRepository</code></td><td><span class="pill req">req</span></td><td>—</td><td>Persistence + retrieval.</td></tr>
+        <tr><td><code>agentId</code></td><td><code>string</code></td><td><span class="pill req">req</span></td><td>—</td><td>Scope key — memory persists per agent.</td></tr>
+        <tr><td><code>weights</code></td><td><code>RecallWeights</code></td><td><span class="pill opt">opt</span></td><td><code>DEFAULT_RECALL_WEIGHTS</code></td><td>Rerank blend.</td></tr>
+        <tr><td><code>dedupeThreshold</code></td><td><code>number</code></td><td><span class="pill opt">opt</span></td><td><code>0.92</code></td><td>Cosine sim above which a proposal is a dup.</td></tr>
+        <tr><td><code>defaultTopK</code></td><td><code>number</code></td><td><span class="pill opt">opt</span></td><td><code>8</code></td><td>Atoms returned by recall.</td></tr>
+        <tr><td><code>enableGraph</code></td><td><code>boolean</code></td><td><span class="pill opt">opt</span></td><td><code>true</code></td><td>Toggle the graph path.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="recall">mem.recall(query, topK?) <a class="hash" href="#recall">#</a></h2>
+    <p><code>recall(query: string, topK?: number): Promise&lt;RecalledAtom[]&gt;</code></p>
+    <p>Embeds the query, runs hybrid retrieval, and returns the top‑K atoms ordered by score (highest first). Never throws on an empty store — returns <code>[]</code>.</p>
+    <div class="codewrap"><pre><code><span class="tok-key">const</span> hits = <span class="tok-key">await</span> mem.<span class="tok-fn">recall</span>(<span class="tok-str">"what is the user allergic to?"</span>, <span class="tok-num">5</span>)
+hits[<span class="tok-num">0</span>] <span class="tok-com">// → { content, score, similarity, graphScore, sources:["vector","graph"], … }</span></code></pre></div>
+
+    <h2 id="capture">mem.capture(turn) <a class="hash" href="#capture">#</a></h2>
+    <p><code>capture(turn: Turn): Promise&lt;CaptureResult&gt;</code> → <code>{ created: Atom[], skipped: number }</code></p>
+    <p>Extracts atoms from a completed turn, embeds + dedupes them, and persists the survivors. <code>skipped</code> counts near-duplicates dropped.</p>
+    <div class="codewrap"><pre><code><span class="tok-key">const</span> { created, skipped } = <span class="tok-key">await</span> mem.<span class="tok-fn">capture</span>({
+  sessionId, userMessageId, assistantMessageId,
+  userText, assistantText,
+})</code></pre></div>
+
+    <h2 id="types">Core types <a class="hash" href="#types">#</a></h2>
+    <h3>Atom</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td><code>string</code></td><td>UUID</td></tr>
+        <tr><td><code>agentId</code></td><td><code>string</code></td><td>scope</td></tr>
+        <tr><td><code>type</code></td><td><code>AtomType</code></td><td><code>episode|fact|preference|trait|skill</code></td></tr>
+        <tr><td><code>content</code></td><td><code>string</code></td><td>the remembered statement</td></tr>
+        <tr><td><code>entities</code></td><td><code>string[]</code></td><td>graph nodes</td></tr>
+        <tr><td><code>evidence</code></td><td><code>string[]</code></td><td>source message ids</td></tr>
+        <tr><td><code>derivedFrom</code></td><td><code>string[]</code></td><td>parent atoms (consolidation)</td></tr>
+        <tr><td><code>salience</code></td><td><code>number</code></td><td>0..1</td></tr>
+        <tr><td><code>pinned</code></td><td><code>boolean</code></td><td>user tattoo</td></tr>
+        <tr><td><code>status</code></td><td><code>AtomStatus</code></td><td><code>warm|cold|tombstoned</code></td></tr>
+        <tr><td><code>createdAt</code></td><td><code>string</code></td><td>ISO timestamp</td></tr>
+      </tbody>
+    </table></div>
+    <h3>RecalledAtom <span class="muted" style="font-weight:400; font-size:.85rem;">extends Atom</span></h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>score</code></td><td><code>number</code></td><td>final blended rank score</td></tr>
+        <tr><td><code>similarity</code></td><td><code>number</code></td><td>cosine sim (0 if not a vector match)</td></tr>
+        <tr><td><code>graphScore</code></td><td><code>number</code></td><td>graph proximity 0..1</td></tr>
+        <tr><td><code>sources</code></td><td><code>('vector'|'graph')[]</code></td><td>paths that surfaced it</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Turn</h3>
+    <div class="codewrap"><pre><code><span class="tok-key">interface</span> <span class="tok-type">Turn</span> {
+  sessionId: <span class="tok-type">string</span>
+  userMessageId: <span class="tok-type">string</span>
+  assistantMessageId: <span class="tok-type">string</span>
+  userText: <span class="tok-type">string</span>
+  assistantText: <span class="tok-type">string</span>
+}</code></pre></div>
+
+    <h2 id="interfaces">Interfaces (bring your own) <a class="hash" href="#interfaces">#</a></h2>
+    <p>Everything external is an interface — swap any of them without touching the rest.</p>
+    <h3>Embedder</h3>
+    <div class="codewrap"><pre><code><span class="tok-key">interface</span> <span class="tok-type">Embedder</span> {
+  <span class="tok-key">readonly</span> dim: <span class="tok-type">number</span>
+  <span class="tok-fn">embed</span>(text: <span class="tok-type">string</span>): <span class="tok-type">Promise</span>&lt;<span class="tok-type">number</span>[]&gt;
+  <span class="tok-fn">embedBatch</span>(texts: <span class="tok-type">string</span>[]): <span class="tok-type">Promise</span>&lt;<span class="tok-type">number</span>[][]&gt;
+}</code></pre></div>
+    <p class="muted">Default: <code>LocalEmbedder</code> (all-MiniLM-L6-v2, 384‑dim). Call <code>init()</code> at boot to load eagerly.</p>
+    <h3>LlmExtractor</h3>
+    <div class="codewrap"><pre><code><span class="tok-key">interface</span> <span class="tok-type">LlmExtractor</span> {
+  <span class="tok-com">// returns raw JSON: { atoms: [{ type, content, entities }] }</span>
+  <span class="tok-fn">propose</span>(input: { userText: <span class="tok-type">string</span>; assistantText: <span class="tok-type">string</span> }): <span class="tok-type">Promise</span>&lt;<span class="tok-type">unknown</span>&gt;
+}</code></pre></div>
+    <p class="muted">The SDK validates the returned JSON with Zod, so <code>propose</code> can return anything shaped like <code>{ atoms: [...] }</code> — use provider tool-calling / JSON mode.</p>
+    <h3>MemoryRepository</h3>
+    <p>Persistence + retrieval. <code>PostgresMemoryRepository</code> is included; implement the interface for any other store. Key methods:</p>
+    <ul>
+      <li><code>insertAtom</code>, <code>searchAtomsByVector</code>, <code>findSimilarForDedup</code></li>
+      <li><code>findEntitiesInText</code>, <code>graphTraverse</code> <span class="muted">— the GraphRAG hooks</span></li>
+      <li><code>listAtoms</code>, <code>getAtom</code>, <code>recordAccess</code></li>
+      <li><code>pinAtom</code>, <code>tombstoneAtom</code> <span class="muted">— pin / forget</span></li>
+      <li><code>createSession</code>, <code>addMessage</code>, <code>getRecentMessages</code></li>
+    </ul>
+
+    <h2 id="config">Configuration <a class="hash" href="#config">#</a></h2>
+    <p>Default rerank weights (override via <code>weights</code>):</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Weight</th><th>Default</th><th>Signal</th></tr></thead>
+      <tbody>
+        <tr><td><code>vector</code></td><td><code>0.55</code></td><td>cosine similarity</td></tr>
+        <tr><td><code>graph</code></td><td><code>0.25</code></td><td>graph proximity</td></tr>
+        <tr><td><code>recency</code></td><td><code>0.15</code></td><td>exponential age decay</td></tr>
+        <tr><td><code>pinned</code></td><td><code>0.05</code></td><td>user pin boost</td></tr>
+        <tr><td><code>recencyHalfLifeDays</code></td><td><code>14</code></td><td>decay half-life</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted">The reference server maps these to env vars (<code>RECALL_W_VECTOR</code>, <code>RECALL_W_GRAPH</code>, <code>GRAPH_ENABLED</code>, <code>DEDUPE_COSINE_THRESHOLD</code>, …) — but the SDK itself takes them directly in <code>createMemory</code>.</p>
+
+    <h2 id="recipes">Recipes <a class="hash" href="#recipes">#</a></h2>
+    <h3>Swap the embedder (hosted API)</h3>
+    <div class="codewrap"><pre><code><span class="tok-key">class</span> <span class="tok-type">ApiEmbedder</span> <span class="tok-key">implements</span> <span class="tok-type">Embedder</span> {
+  dim = <span class="tok-num">1536</span>
+  <span class="tok-key">async</span> <span class="tok-fn">embed</span>(text) { <span class="tok-key">return</span> callEmbeddingsApi(text) }
+  <span class="tok-key">async</span> <span class="tok-fn">embedBatch</span>(texts) { <span class="tok-key">return</span> <span class="tok-type">Promise</span>.<span class="tok-fn">all</span>(texts.<span class="tok-fn">map</span>(<span class="tok-fn">this</span>.embed)) }
+}
+<span class="tok-fn">createMemory</span>({ embedder: <span class="tok-key">new</span> <span class="tok-fn">ApiEmbedder</span>(), … })</code></pre></div>
+    <h3>Use any LLM for extraction</h3>
+    <div class="codewrap"><pre><code><span class="tok-key">const</span> extractor: <span class="tok-type">LlmExtractor</span> = {
+  <span class="tok-key">async</span> <span class="tok-fn">propose</span>({ userText, assistantText }) {
+    <span class="tok-com">// return { atoms: [{ type, content, entities }] } via tool-calling / JSON mode</span>
+    <span class="tok-key">return</span> <span class="tok-key">await</span> <span class="tok-fn">myLlmJson</span>(userText, assistantText)
+  },
+}</code></pre></div>
+    <h3>Vector-only (disable graph)</h3>
+    <div class="codewrap"><pre><code><span class="tok-fn">createMemory</span>({ …, enableGraph: <span class="tok-key">false</span> })</code></pre></div>
+
+    <h2 id="lifecycle">Pin &amp; forget <a class="hash" href="#lifecycle">#</a></h2>
+    <p>Memory is user-correctable. Pinning clamps salience to 1.0 (never evicted); forgetting tombstones the atom and nulls its embedding — both append an audit op.</p>
+    <div class="codewrap"><pre><code><span class="tok-key">await</span> mem.repository.<span class="tok-fn">pinAtom</span>(atomId, <span class="tok-key">true</span>)        <span class="tok-com">// 📌 keep forever</span>
+<span class="tok-key">await</span> mem.repository.<span class="tok-fn">tombstoneAtom</span>(atomId, <span class="tok-str">"user asked to forget"</span>)</code></pre></div>
+
+    <h2 id="testing">Testing <a class="hash" href="#testing">#</a></h2>
+    <p>Because the dependencies are interfaces, you can test your integration with deterministic fakes — no network, no flake. Inject a fake <code>Embedder</code> (hash → stable vector) and fake <code>LlmExtractor</code> (scripted JSON), and assert on recall ordering and captured atoms. The SDK ships 41 tests built exactly this way, plus real <code>pgvector</code> integration tests.</p>
+
+    <h2 id="roadmap">Roadmap <a class="hash" href="#roadmap">#</a></h2>
+    <ul>
+      <li><b>M1 — Core</b> <span class="pill req">shipping</span> · atoms · local embeddings · GraphRAG · live view</li>
+      <li><b>M2 — Cognition</b> · salience decay + eviction · consolidation "sleep cycle" (episodes → semantic)</li>
+      <li><b>M3 — Integrity</b> · CRDT ledger · Ed25519 op signing · capability tokens</li>
+    </ul>
+    <div class="note"><b>Note:</b> the schema and interfaces for all three milestones already exist — each lands without a rewrite.</div>
+
+    <footer>
+      <p><b>MemAtom</b> · <a href="https://rajuroopani.github.io/mematom-deck/">deck</a> · <a href="https://github.com/RajuRoopani/mematom" target="_blank" rel="noopener">github.com/RajuRoopani/mematom</a> · MIT</p>
+    </footer>
+
+  </article>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  // mobile sidebar toggle
+  const sidebar = document.getElementById('sidebar');
+  const toggle = document.getElementById('menuToggle');
+  toggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+  sidebar.addEventListener('click', (e) => { if (e.target.tagName === 'A') sidebar.classList.remove('open'); });
+
+  // copy buttons on every code block
+  document.querySelectorAll('.codewrap').forEach((wrap) => {
+    const pre = wrap.querySelector('pre');
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn'; btn.type = 'button'; btn.textContent = 'copy';
+    btn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(pre.innerText); } catch(_) {}
+      btn.textContent = '✓ copied'; setTimeout(() => btn.textContent = 'copy', 1300);
+    });
+    wrap.appendChild(btn);
+  });
+
+  // scroll-spy: highlight the active sidebar link
+  const links = Array.from(document.querySelectorAll('.sidebar a'));
+  const map = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+  const heads = Array.from(document.querySelectorAll('h2[id], h3[id]')).filter(h => map.has(h.id));
+  const spy = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting) {
+        links.forEach(a => a.classList.remove('active'));
+        const a = map.get(en.target.id); if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
+  heads.forEach(h => spy.observe(h));
+})();
+</script>
+</body>
+</html>

@@ -5,7 +5,8 @@ memory SDK for AI agents — per-message memory atoms, local embeddings (no API
 key), and GraphRAG retrieval.
 
 ### ▶ View it live
-**https://rajuroopani.github.io/mematom-deck/**
+- **Deck:** https://rajuroopani.github.io/mematom-deck/
+- **Developer docs:** https://rajuroopani.github.io/mematom-deck/docs/ — API reference + integration guide for `@mematom/memory-sdk`
 
 ### Run locally
 Just open `index.html` in any browser — no build, no dependencies.
