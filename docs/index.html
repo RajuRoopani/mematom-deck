@@ -133,6 +133,47 @@ td:first-child code{ color:var(--accent); }
 .scopes .s .ex{ color:var(--muted); font-style:italic; font-size:.8rem; }
 @media (max-width:760px){ .scopes{ grid-template-columns:1fr; } }
 
+/* ---------- block architecture diagram ---------- */
+.arch{ margin:1.5rem 0 1.8rem; }
+.arch-region{ position:relative; border:1px solid var(--edge); border-radius:16px; padding:1.6rem 1.1rem 1.1rem; background:linear-gradient(180deg,rgba(255,255,255,.025),transparent); }
+.arch-region-label{ position:absolute; top:-.62rem; left:1.1rem; background:var(--bg); padding:0 .55rem; font-size:.66rem; text-transform:uppercase; letter-spacing:.16em; color:var(--accent); font-weight:700; }
+.arch-flow{ display:flex; align-items:stretch; justify-content:center; gap:.55rem; flex-wrap:wrap; }
+.arch-box{ background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--edge); border-radius:12px; padding:.7rem 1.1rem; min-width:128px; text-align:center; font-size:.92rem; color:#fff; font-weight:600; display:flex; flex-direction:column; gap:.18rem; justify-content:center; }
+.bx-k{ font-size:.62rem; text-transform:uppercase; letter-spacing:.13em; color:var(--muted); font-weight:700; }
+.arch-arrow{ align-self:center; color:var(--accent); font-size:1.15rem; line-height:1; }
+.arch-conn{ display:flex; flex-direction:column; align-items:center; gap:.2rem; padding:.4rem 0; }
+.conn-line{ width:2px; height:20px; background:linear-gradient(var(--edge),var(--accent)); }
+.conn-arrow{ color:var(--accent); font-size:.85rem; line-height:.6; }
+.conn-label{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--muted); text-align:center; }
+.conn-label b{ color:var(--accent); }
+.arch-sdk{ text-align:center; font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--accent); border:1px dashed var(--accent); border-radius:999px; padding:.32rem 1.1rem; width:fit-content; margin:.1rem auto; background:var(--accent-soft); }
+.arch-orch{ border:1px solid var(--accent); background:var(--accent-soft); border-radius:14px; padding:1rem 1.1rem; text-align:center; }
+.arch-orch .bx-k{ color:var(--accent); }
+.arch-scope{ font-size:.8rem; color:var(--muted); margin:.35rem 0 .7rem; }
+.arch-scope code{ font-size:.74rem; }
+.arch-sub{ display:flex; align-items:stretch; justify-content:center; gap:.45rem; flex-wrap:wrap; }
+.sub-box{ background:var(--bg2); border:1px solid var(--edge); border-radius:9px; padding:.42rem .75rem; font-size:.82rem; color:#eef0f4; display:flex; flex-direction:column; line-height:1.25; justify-content:center; }
+.sub-box small{ color:var(--faint); font-size:.64rem; margin-top:.1rem; }
+.sub-box.solid{ background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+.arch-op{ align-self:center; color:var(--faint); font-family:'JetBrains Mono',monospace; }
+.arch-stores{ display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; }
+.store-box{ border:1px solid var(--edge); border-top:3px solid var(--edge); border-radius:12px; padding:.95rem 1rem; background:var(--panel); }
+.store-box .store-ic{ font-size:1.25rem; display:block; margin-bottom:.35rem; line-height:1; }
+.store-box .bx-k{ color:#fff; font-size:.82rem; letter-spacing:.02em; text-transform:none; }
+.store-box p{ font-size:.78rem; color:var(--muted); margin:.35rem 0 0; line-height:1.4; }
+.store-box.redis{ border-top-color:#e3564c; } .store-box.redis .store-ic{ color:#f0796f; }
+.store-box.pg{ border-top-color:var(--cyan); } .store-box.pg .store-ic{ color:var(--cyan); }
+.store-box.graph{ border-top-color:var(--accent); } .store-box.graph .store-ic{ color:var(--accent); }
+.store-tag{ font-size:.64rem; text-transform:uppercase; letter-spacing:.1em; color:var(--faint); display:block; margin-top:.3rem; }
+@media (max-width:720px){
+  .arch-stores{ grid-template-columns:1fr; }
+  .arch-flow{ flex-direction:column; align-items:center; }
+  .arch-flow .arch-box{ width:100%; max-width:280px; }
+  .arch-flow .arch-arrow{ transform:rotate(90deg); }
+  .arch-sub{ flex-direction:column; align-items:stretch; }
+  .arch-sub .arch-arrow,.arch-op{ transform:rotate(90deg); align-self:center; }
+}
+
 footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem; color:var(--faint); font-size:.85rem; }
 
 /* ---------- responsive ---------- */
@@ -211,30 +252,71 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
 
     <h2 id="architecture">System architecture <a class="hash" href="#architecture">#</a></h2>
     <p>MemAtom sits between your agent runtime and your stores. The agent calls two verbs — <code>recall()</code> and <code>capture()</code> — and the SDK handles scoping, hybrid retrieval, caching, and durable persistence.</p>
-    <pre class="diagram">        ┌───────────────────── YOUR AGENTIC SYSTEM ──────────────────────┐
-        │  user / meeting turn                                           │
-        │        │                                                       │
-        │        ▼            recall(query, { user, meeting, entities }) │
-        │  Agent runtime ───────────────────────────────────────┐       │
-        │        ▲                                               │       │
-        │        └──────────── inject memories ◀── top-K ────────┘       │
-        │        │                                                       │
-        │   LLM reply ──── capture(turn) ▶ new atoms (tagged w/ scope)   │
-        └───────────────────────────────┬───────────────────────────────┘
-                                         │  @mematom/memory-sdk
-            ┌────────────────────────────▼───────────────────────────┐
-            │               RETRIEVAL  ORCHESTRATOR                   │
-            │   scope filter:  userId · meetingId · entities          │
-            │   vector ‖ graph ‖ recency/pin  ──▶ rerank ──▶ top-K    │
-            └─────┬──────────────────┬─────────────────────┬──────────┘
-                  ▼                  ▼                      ▼
-          ┌──────────────┐  ┌─────────────────┐   ┌──────────────────┐
-          │   REDIS      │  │  POSTGRES +     │   │  KNOWLEDGE GRAPH │
-          │   hot tier   │  │  pgvector       │   │  entities ↔ atoms│
-          │   per-scope  │  │  source of truth│   │  per-entity      │
-          │   atoms <1ms │  │  atoms + vectors│   │  traversal       │
-          └──────────────┘  └─────────────────┘   └──────────────────┘
-            read-through        durable · ANN          graph (1–2 hop)</pre>
+    <div class="arch" role="img" aria-label="MemAtom architecture: an agent runtime calls recall and capture through the memory SDK, which runs a retrieval orchestrator over Redis, Postgres+pgvector, and a knowledge graph.">
+
+      <!-- Layer 1 — the host agentic system -->
+      <div class="arch-region">
+        <span class="arch-region-label">Your agentic system</span>
+        <div class="arch-flow">
+          <div class="arch-box"><span class="bx-k">Input</span>User / meeting turn</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-box"><span class="bx-k">Runtime</span>Agent loop</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-box"><span class="bx-k">Model</span>LLM reply</div>
+        </div>
+      </div>
+
+      <!-- connector: the two SDK calls -->
+      <div class="arch-conn">
+        <span class="conn-label"><b>recall(</b>query, scope<b>)</b> ↓ &nbsp;·&nbsp; ↑ <b>capture(</b>turn<b>)</b></span>
+        <span class="conn-line"></span>
+      </div>
+
+      <!-- SDK boundary -->
+      <div class="arch-sdk">@mematom/memory-sdk</div>
+
+      <div class="arch-conn"><span class="conn-line"></span><span class="conn-arrow">▼</span></div>
+
+      <!-- Layer 2 — retrieval orchestrator -->
+      <div class="arch-orch">
+        <span class="bx-k">Retrieval orchestrator</span>
+        <div class="arch-scope">scope filter · <code>userId</code> · <code>meetingId</code> · <code>entities</code></div>
+        <div class="arch-sub">
+          <span class="sub-box">Vector<small>pgvector ANN</small></span>
+          <span class="arch-op">‖</span>
+          <span class="sub-box">Graph<small>1–2 hop</small></span>
+          <span class="arch-op">‖</span>
+          <span class="sub-box">Recency / pin</span>
+          <span class="arch-arrow">→</span>
+          <span class="sub-box solid">rerank → top-K</span>
+        </div>
+      </div>
+
+      <div class="arch-conn"><span class="conn-line"></span><span class="conn-arrow">▼</span></div>
+
+      <!-- Layer 3 — storage -->
+      <div class="arch-stores">
+        <div class="store-box redis">
+          <span class="store-ic">⚡</span>
+          <span class="bx-k">Redis</span>
+          <p>Per-scope atom cache. Read-through, &lt;1&nbsp;ms.</p>
+          <span class="store-tag">Hot tier</span>
+        </div>
+        <div class="store-box pg">
+          <span class="store-ic">▦</span>
+          <span class="bx-k">Postgres + pgvector</span>
+          <p>Atoms + vectors. Durable, ANN search.</p>
+          <span class="store-tag">Source of truth</span>
+        </div>
+        <div class="store-box graph">
+          <span class="store-ic">◈</span>
+          <span class="bx-k">Knowledge graph</span>
+          <p>Entities ↔ atoms. Per-entity traversal.</p>
+          <span class="store-tag">Relations</span>
+        </div>
+      </div>
+
+    </div>
     <p>Three layers do the work:</p>
     <ul>
       <li><b>Capture</b> — each turn is distilled into atoms tagged with their scope: <code>userId</code> (who), <code>meetingId</code>/<code>sessionId</code> (where), <code>entities[]</code> (what), <code>agentId</code> (which agent).</li>
