@@ -126,7 +126,7 @@ td:first-child code{ color:var(--accent); }
   font-family:'JetBrains Mono',monospace; font-size:.72rem; line-height:1.4; color:#c7ccd8;
   white-space:pre;
 }
-.scopes{ display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; margin:1.2rem 0; }
+.scopes{ display:grid; grid-template-columns:repeat(2,1fr); gap:.8rem; margin:1.2rem 0; }
 .scopes .s{ border:1px solid var(--edge); border-top:3px solid var(--accent); border-radius:12px; padding:.9rem 1rem; background:var(--panel); }
 .scopes .s h4{ font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; color:var(--accent); margin:0 0 .4rem; font-weight:700; }
 .scopes .s p{ font-size:.85rem; color:#d7dae2; margin:.25rem 0; }
@@ -146,6 +146,19 @@ td:first-child code{ color:var(--accent); }
 .conn-arrow{ color:var(--accent); font-size:.85rem; line-height:.6; }
 .conn-label{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--muted); text-align:center; }
 .conn-label b{ color:var(--accent); }
+/* duplex (two-way) connectors: explicit request-down / result-up */
+.arch-duplex{ display:flex; justify-content:center; gap:clamp(1.4rem,9vw,4.5rem); padding:.5rem 0; }
+.dx{ display:flex; flex-direction:column; align-items:center; gap:.22rem; }
+.dx .dx-line{ width:2px; height:15px; background:var(--edge); }
+.dx .dx-arrow{ color:var(--accent); font-size:.8rem; line-height:.5; }
+.dx .dx-lbl{ font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--muted); text-align:center; line-height:1.32; }
+.dx .dx-lbl b{ color:var(--accent); }
+.dx.up .dx-arrow{ color:var(--accent-2); }
+.dx.up .dx-lbl b{ color:var(--accent-2); }
+.arch-write{ margin-top:1rem; text-align:center; }
+.arch-write .wlbl{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--muted); border:1px dashed var(--edge); border-radius:999px; padding:.38rem 1rem; }
+.arch-write .wlbl b{ color:var(--accent); }
+@media (max-width:720px){ .arch-duplex{ gap:1.4rem; } }
 .arch-sdk{ text-align:center; font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--accent); border:1px dashed var(--accent); border-radius:999px; padding:.32rem 1.1rem; width:fit-content; margin:.1rem auto; background:var(--accent-soft); }
 .arch-orch{ border:1px solid var(--accent); background:var(--accent-soft); border-radius:14px; padding:1rem 1.1rem; text-align:center; }
 .arch-orch .bx-k{ color:var(--accent); }
@@ -241,24 +254,24 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
     <div class="rule"></div>
 
     <h2 id="problem">The problem it solves <a class="hash" href="#problem">#</a></h2>
-    <p>A production agent never serves just one conversation. It serves <b>many users</b>, sits in <b>many meetings</b>, and reasons over <b>many entities</b> — people, projects, documents. Two default approaches both break down:</p>
+    <p>A production agent never serves just one conversation. It serves <b>many users</b> and reasons over <b>many entities</b> — people, projects, documents. Two default approaches both break down:</p>
     <ul>
-      <li><b>Stateless agent</b> — forgets everything between turns and sessions. It can never act like it knows <i>you</i>, recall <i>this meeting</i>, or carry context about <i>this account</i>.</li>
+      <li><b>Stateless agent</b> — forgets everything between turns and sessions. It can never act like it knows <i>you</i> or carry context about <i>this account</i>.</li>
       <li><b>Context-stuffing</b> — pasting raw history into the prompt is unscoped, unsearchable, blows the token budget, and still misses anything outside the window.</li>
     </ul>
     <p>The real requirement:</p>
-    <div class="note"><b>Given the current turn, retrieve exactly the memories that matter — scoped to this user, this meeting, and the entities in play — across every past session, in &lt;200&nbsp;ms, without bloating the context window.</b></div>
+    <div class="note"><b>Given the current turn, retrieve exactly the memories that matter — scoped to this user and the entities in play — across every past session, in &lt;200&nbsp;ms, without bloating the context window.</b></div>
     <p>That is a retrieval + scoping + freshness problem — a <i>memory system</i>, not a longer window. MemAtom is that layer, dropped in beside your LLM.</p>
 
     <h2 id="architecture">System architecture <a class="hash" href="#architecture">#</a></h2>
     <p>MemAtom sits between your agent runtime and your stores. The agent calls two verbs — <code>recall()</code> and <code>capture()</code> — and the SDK handles scoping, hybrid retrieval, caching, and durable persistence.</p>
-    <div class="arch" role="img" aria-label="MemAtom architecture: an agent runtime calls recall and capture through the memory SDK, which runs a retrieval orchestrator over Redis, Postgres+pgvector, and a knowledge graph.">
+    <div class="arch" role="img" aria-label="MemAtom architecture: the agent calls recall to retrieve memories from the orchestrator (over Redis, Postgres+pgvector, and a knowledge graph), the top-K atoms are injected back into the prompt, and capture writes new atoms back to the stores.">
 
       <!-- Layer 1 — the host agentic system -->
       <div class="arch-region">
         <span class="arch-region-label">Your agentic system</span>
         <div class="arch-flow">
-          <div class="arch-box"><span class="bx-k">Input</span>User / meeting turn</div>
+          <div class="arch-box"><span class="bx-k">Input</span>User message</div>
           <span class="arch-arrow">→</span>
           <div class="arch-box"><span class="bx-k">Runtime</span>Agent loop</div>
           <span class="arch-arrow">→</span>
@@ -266,10 +279,10 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
         </div>
       </div>
 
-      <!-- connector: the two SDK calls -->
-      <div class="arch-conn">
-        <span class="conn-label"><b>recall(</b>query, scope<b>)</b> ↓ &nbsp;·&nbsp; ↑ <b>capture(</b>turn<b>)</b></span>
-        <span class="conn-line"></span>
+      <!-- duplex: ① recall request down · ④ inject memories up -->
+      <div class="arch-duplex">
+        <div class="dx"><span class="dx-lbl"><b>① recall(</b>query, scope<b>)</b></span><span class="dx-line"></span><span class="dx-arrow">▼</span></div>
+        <div class="dx up"><span class="dx-arrow">▲</span><span class="dx-line"></span><span class="dx-lbl"><b>④ inject memories</b><br>top-K → prompt</span></div>
       </div>
 
       <!-- SDK boundary -->
@@ -280,7 +293,7 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
       <!-- Layer 2 — retrieval orchestrator -->
       <div class="arch-orch">
         <span class="bx-k">Retrieval orchestrator</span>
-        <div class="arch-scope">scope filter · <code>userId</code> · <code>meetingId</code> · <code>entities</code></div>
+        <div class="arch-scope">scope filter · <code>userId</code> · <code>entities</code></div>
         <div class="arch-sub">
           <span class="sub-box">Vector<small>pgvector ANN</small></span>
           <span class="arch-op">‖</span>
@@ -292,7 +305,11 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
         </div>
       </div>
 
-      <div class="arch-conn"><span class="conn-line"></span><span class="conn-arrow">▼</span></div>
+      <!-- duplex: ② retrieve memories down · ③ candidate atoms up -->
+      <div class="arch-duplex">
+        <div class="dx"><span class="dx-lbl"><b>② retrieve memories</b></span><span class="dx-line"></span><span class="dx-arrow">▼</span></div>
+        <div class="dx up"><span class="dx-arrow">▲</span><span class="dx-line"></span><span class="dx-lbl"><b>③ candidate atoms</b></span></div>
+      </div>
 
       <!-- Layer 3 — storage -->
       <div class="arch-stores">
@@ -316,37 +333,38 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
         </div>
       </div>
 
+      <!-- write path -->
+      <div class="arch-write"><span class="wlbl"><b>capture(turn)</b> ⟶ writes new atoms back to the stores · async, off the hot path</span></div>
+
     </div>
     <p>Three layers do the work:</p>
     <ul>
-      <li><b>Capture</b> — each turn is distilled into atoms tagged with their scope: <code>userId</code> (who), <code>meetingId</code>/<code>sessionId</code> (where), <code>entities[]</code> (what), <code>agentId</code> (which agent).</li>
+      <li><b>Capture</b> — each turn is distilled into atoms tagged with their scope: <code>userId</code> (who), <code>entities[]</code> (what), <code>agentId</code> (which agent).</li>
       <li><b>Store</b> — <b>Postgres + pgvector</b> is the durable source of truth (atoms + vectors); a <b>knowledge graph</b> (entities ↔ atoms) powers entity-level recall; <b>Redis</b> is a hot tier for sub-millisecond reads on the conversational path.</li>
       <li><b>Retrieve</b> — the orchestrator applies scope filters, runs vector + graph in parallel, reranks by recency/pin, and returns the top-K to inject.</li>
     </ul>
 
-    <h2 id="scopes">Memory scopes — per user · per meeting · per entity <a class="hash" href="#scopes">#</a></h2>
+    <h2 id="scopes">Memory scopes — per user · per entity <a class="hash" href="#scopes">#</a></h2>
     <p>Every atom carries scope dimensions, so recall can target any slice of memory — or blend them:</p>
     <div class="scopes">
       <div class="s"><h4>Per user</h4><p>Durable facts &amp; preferences about a person, across all their sessions.</p><p><code>userId</code> filter</p><p class="ex">"What does this user prefer?"</p></div>
-      <div class="s"><h4>Per meeting</h4><p>What happened inside one meeting / session — recaps, decisions, action items.</p><p><code>meetingId</code> · <code>sessionId</code></p><p class="ex">"Recap the Q3 sync."</p></div>
       <div class="s"><h4>Per entity</h4><p>Everything linked to a person, project, or topic via the knowledge graph.</p><p>graph <code>entities[]</code></p><p class="ex">"All memory on Project Titan."</p></div>
     </div>
-    <p>Scopes layer <i>on top of</i> the hybrid ranking — e.g. recall for <code>userId=u123</code>, within <code>meetingId=m88</code>, that also touches entity <code>"titan"</code>. Per-entity is the GraphRAG path; per-user / per-meeting are indexed filters on the atom store.</p>
+    <p>Scopes layer <i>on top of</i> the hybrid ranking — e.g. recall for <code>userId=u123</code> that also touches entity <code>"titan"</code>. Per-entity is the GraphRAG path; per-user is an indexed filter on the atom store.</p>
     <div class="codewrap"><pre><code><span class="tok-com">// scoped recall</span>
 <span class="tok-key">const</span> memories = <span class="tok-key">await</span> mem.<span class="tok-fn">recall</span>(query, {
-  userId:    <span class="tok-str">"u123"</span>,
-  meetingId: <span class="tok-str">"m88"</span>,        <span class="tok-com">// optional — narrow to one meeting</span>
-  entities:  [<span class="tok-str">"titan"</span>],    <span class="tok-com">// optional — graph hints</span>
+  userId:   <span class="tok-str">"u123"</span>,
+  entities: [<span class="tok-str">"titan"</span>],    <span class="tok-com">// optional — graph hints</span>
   topK: <span class="tok-num">8</span>,
 })</code></pre></div>
-    <div class="note"><b>Status:</b> M1 scopes by <code>agentId</code> + the entity graph (per-entity recall ships today). Per-user / per-meeting filters and the scoped <code>recall()</code> overload are part of this architecture and slot in behind the existing <code>MemoryRepository</code> interface — additive, no rewrite.</div>
+    <div class="note"><b>Status:</b> M1 scopes by <code>agentId</code> + the entity graph (per-entity recall ships today). The per-user filter and the scoped <code>recall()</code> overload are part of this architecture and slot in behind the existing <code>MemoryRepository</code> interface — additive, no rewrite.</div>
 
     <h2 id="redis">Hot tier — Redis cache <a class="hash" href="#redis">#</a></h2>
     <p>Recall is on the conversational hot path — the agent and the user are waiting — so it has to be fast. Postgres + pgvector is the durable source of truth, but an ANN search plus graph joins cost tens of milliseconds and don't love thousands of concurrent agents. MemAtom puts <b>Redis</b> in front as a hot tier, so the common case answers in <b>&lt;1&nbsp;ms</b> and Postgres is shielded at scale.</p>
     <div class="tablewrap"><table>
       <thead><tr><th>Cache</th><th>Key</th><th>Holds</th><th>Eviction</th></tr></thead>
       <tbody>
-        <tr><td>Hot atoms / scope</td><td><code>mem:user:{id}:hot</code><br><code>mem:meeting:{id}</code><br><code>mem:entity:{id}</code></td><td>sorted set of recent / high-salience atoms</td><td>salience × recency, capped</td></tr>
+        <tr><td>Hot atoms / scope</td><td><code>mem:user:{id}:hot</code><br><code>mem:entity:{id}</code></td><td>sorted set of recent / high-salience atoms</td><td>salience × recency, capped</td></tr>
         <tr><td>Recall results</td><td><code>mem:recall:{hash}</code></td><td>top-K for a repeated query+scope</td><td>short TTL (e.g. 60s)</td></tr>
         <tr><td>Query embeddings</td><td><code>mem:embed:{hash}</code></td><td>vector for a frequent query</td><td>TTL / LRU</td></tr>
       </tbody>
