@@ -119,6 +119,20 @@ td:first-child code{ color:var(--accent); }
 .pill.req{ color:var(--accent); border-color:var(--accent); }
 .pill.opt{ color:var(--faint); }
 
+/* architecture diagram + scope cards */
+.diagram{
+  background:var(--code); border:1px solid var(--edge); border-left:3px solid var(--accent);
+  border-radius:12px; padding:1.1rem 1.2rem; overflow-x:auto; margin:1.3rem 0;
+  font-family:'JetBrains Mono',monospace; font-size:.72rem; line-height:1.4; color:#c7ccd8;
+  white-space:pre;
+}
+.scopes{ display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; margin:1.2rem 0; }
+.scopes .s{ border:1px solid var(--edge); border-top:3px solid var(--accent); border-radius:12px; padding:.9rem 1rem; background:var(--panel); }
+.scopes .s h4{ font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; color:var(--accent); margin:0 0 .4rem; font-weight:700; }
+.scopes .s p{ font-size:.85rem; color:#d7dae2; margin:.25rem 0; }
+.scopes .s .ex{ color:var(--muted); font-style:italic; font-size:.8rem; }
+@media (max-width:760px){ .scopes{ grid-template-columns:1fr; } }
+
 footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem; color:var(--faint); font-size:.85rem; }
 
 /* ---------- responsive ---------- */
@@ -150,6 +164,11 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
 
 <div class="layout">
   <aside class="sidebar" id="sidebar">
+    <h4>Architecture</h4>
+    <a href="#problem">The problem</a>
+    <a href="#architecture">System design</a>
+    <a href="#scopes">Memory scopes</a>
+    <a href="#redis">Hot tier · Redis</a>
     <h4>Start</h4>
     <a href="#overview">Overview</a>
     <a href="#install">Install</a>
@@ -179,6 +198,88 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
     <h1>Developer documentation</h1>
     <p class="lead">A drop-in memory SDK that turns your agent's conversations into structured, retrievable memory — per-message <b>memory atoms</b>, local embeddings (no API key), and <b>GraphRAG</b> recall. Framework-agnostic: two calls fit into any agent loop.</p>
     <div class="rule"></div>
+
+    <h2 id="problem">The problem it solves <a class="hash" href="#problem">#</a></h2>
+    <p>A production agent never serves just one conversation. It serves <b>many users</b>, sits in <b>many meetings</b>, and reasons over <b>many entities</b> — people, projects, documents. Two default approaches both break down:</p>
+    <ul>
+      <li><b>Stateless agent</b> — forgets everything between turns and sessions. It can never act like it knows <i>you</i>, recall <i>this meeting</i>, or carry context about <i>this account</i>.</li>
+      <li><b>Context-stuffing</b> — pasting raw history into the prompt is unscoped, unsearchable, blows the token budget, and still misses anything outside the window.</li>
+    </ul>
+    <p>The real requirement:</p>
+    <div class="note"><b>Given the current turn, retrieve exactly the memories that matter — scoped to this user, this meeting, and the entities in play — across every past session, in &lt;200&nbsp;ms, without bloating the context window.</b></div>
+    <p>That is a retrieval + scoping + freshness problem — a <i>memory system</i>, not a longer window. MemAtom is that layer, dropped in beside your LLM.</p>
+
+    <h2 id="architecture">System architecture <a class="hash" href="#architecture">#</a></h2>
+    <p>MemAtom sits between your agent runtime and your stores. The agent calls two verbs — <code>recall()</code> and <code>capture()</code> — and the SDK handles scoping, hybrid retrieval, caching, and durable persistence.</p>
+    <pre class="diagram">        ┌───────────────────── YOUR AGENTIC SYSTEM ──────────────────────┐
+        │  user / meeting turn                                           │
+        │        │                                                       │
+        │        ▼            recall(query, { user, meeting, entities }) │
+        │  Agent runtime ───────────────────────────────────────┐       │
+        │        ▲                                               │       │
+        │        └──────────── inject memories ◀── top-K ────────┘       │
+        │        │                                                       │
+        │   LLM reply ──── capture(turn) ▶ new atoms (tagged w/ scope)   │
+        └───────────────────────────────┬───────────────────────────────┘
+                                         │  @mematom/memory-sdk
+            ┌────────────────────────────▼───────────────────────────┐
+            │               RETRIEVAL  ORCHESTRATOR                   │
+            │   scope filter:  userId · meetingId · entities          │
+            │   vector ‖ graph ‖ recency/pin  ──▶ rerank ──▶ top-K    │
+            └─────┬──────────────────┬─────────────────────┬──────────┘
+                  ▼                  ▼                      ▼
+          ┌──────────────┐  ┌─────────────────┐   ┌──────────────────┐
+          │   REDIS      │  │  POSTGRES +     │   │  KNOWLEDGE GRAPH │
+          │   hot tier   │  │  pgvector       │   │  entities ↔ atoms│
+          │   per-scope  │  │  source of truth│   │  per-entity      │
+          │   atoms <1ms │  │  atoms + vectors│   │  traversal       │
+          └──────────────┘  └─────────────────┘   └──────────────────┘
+            read-through        durable · ANN          graph (1–2 hop)</pre>
+    <p>Three layers do the work:</p>
+    <ul>
+      <li><b>Capture</b> — each turn is distilled into atoms tagged with their scope: <code>userId</code> (who), <code>meetingId</code>/<code>sessionId</code> (where), <code>entities[]</code> (what), <code>agentId</code> (which agent).</li>
+      <li><b>Store</b> — <b>Postgres + pgvector</b> is the durable source of truth (atoms + vectors); a <b>knowledge graph</b> (entities ↔ atoms) powers entity-level recall; <b>Redis</b> is a hot tier for sub-millisecond reads on the conversational path.</li>
+      <li><b>Retrieve</b> — the orchestrator applies scope filters, runs vector + graph in parallel, reranks by recency/pin, and returns the top-K to inject.</li>
+    </ul>
+
+    <h2 id="scopes">Memory scopes — per user · per meeting · per entity <a class="hash" href="#scopes">#</a></h2>
+    <p>Every atom carries scope dimensions, so recall can target any slice of memory — or blend them:</p>
+    <div class="scopes">
+      <div class="s"><h4>Per user</h4><p>Durable facts &amp; preferences about a person, across all their sessions.</p><p><code>userId</code> filter</p><p class="ex">"What does this user prefer?"</p></div>
+      <div class="s"><h4>Per meeting</h4><p>What happened inside one meeting / session — recaps, decisions, action items.</p><p><code>meetingId</code> · <code>sessionId</code></p><p class="ex">"Recap the Q3 sync."</p></div>
+      <div class="s"><h4>Per entity</h4><p>Everything linked to a person, project, or topic via the knowledge graph.</p><p>graph <code>entities[]</code></p><p class="ex">"All memory on Project Titan."</p></div>
+    </div>
+    <p>Scopes layer <i>on top of</i> the hybrid ranking — e.g. recall for <code>userId=u123</code>, within <code>meetingId=m88</code>, that also touches entity <code>"titan"</code>. Per-entity is the GraphRAG path; per-user / per-meeting are indexed filters on the atom store.</p>
+    <div class="codewrap"><pre><code><span class="tok-com">// scoped recall</span>
+<span class="tok-key">const</span> memories = <span class="tok-key">await</span> mem.<span class="tok-fn">recall</span>(query, {
+  userId:    <span class="tok-str">"u123"</span>,
+  meetingId: <span class="tok-str">"m88"</span>,        <span class="tok-com">// optional — narrow to one meeting</span>
+  entities:  [<span class="tok-str">"titan"</span>],    <span class="tok-com">// optional — graph hints</span>
+  topK: <span class="tok-num">8</span>,
+})</code></pre></div>
+    <div class="note"><b>Status:</b> M1 scopes by <code>agentId</code> + the entity graph (per-entity recall ships today). Per-user / per-meeting filters and the scoped <code>recall()</code> overload are part of this architecture and slot in behind the existing <code>MemoryRepository</code> interface — additive, no rewrite.</div>
+
+    <h2 id="redis">Hot tier — Redis cache <a class="hash" href="#redis">#</a></h2>
+    <p>Recall is on the conversational hot path — the agent and the user are waiting — so it has to be fast. Postgres + pgvector is the durable source of truth, but an ANN search plus graph joins cost tens of milliseconds and don't love thousands of concurrent agents. MemAtom puts <b>Redis</b> in front as a hot tier, so the common case answers in <b>&lt;1&nbsp;ms</b> and Postgres is shielded at scale.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Cache</th><th>Key</th><th>Holds</th><th>Eviction</th></tr></thead>
+      <tbody>
+        <tr><td>Hot atoms / scope</td><td><code>mem:user:{id}:hot</code><br><code>mem:meeting:{id}</code><br><code>mem:entity:{id}</code></td><td>sorted set of recent / high-salience atoms</td><td>salience × recency, capped</td></tr>
+        <tr><td>Recall results</td><td><code>mem:recall:{hash}</code></td><td>top-K for a repeated query+scope</td><td>short TTL (e.g. 60s)</td></tr>
+        <tr><td>Query embeddings</td><td><code>mem:embed:{hash}</code></td><td>vector for a frequent query</td><td>TTL / LRU</td></tr>
+      </tbody>
+    </table></div>
+    <ul>
+      <li><b>Read-through</b> — <code>recall()</code> checks Redis first; on a miss it runs vector + graph against Postgres, returns, then warms the cache.</li>
+      <li><b>Write-through / invalidation</b> — <code>capture()</code>, <code>pinAtom()</code>, and <code>tombstoneAtom()</code> update or evict the affected scope keys, so the cache never serves a stale or <i>forgotten</i> atom.</li>
+    </ul>
+    <p>It's an opt-in layer, not a rewrite — wrap the durable store in a caching decorator that implements the same <code>MemoryRepository</code> interface:</p>
+    <div class="codewrap"><pre><code><span class="tok-key">const</span> repository = <span class="tok-key">new</span> <span class="tok-fn">CachedRepository</span>(
+  <span class="tok-key">new</span> <span class="tok-fn">PostgresMemoryRepository</span>(pool),    <span class="tok-com">// durable source of truth</span>
+  <span class="tok-key">new</span> <span class="tok-fn">Redis</span>(process.env.<span class="tok-type">REDIS_URL</span>),      <span class="tok-com">// hot tier</span>
+)
+<span class="tok-fn">createMemory</span>({ embedder, extractor, repository, agentId })</code></pre></div>
+    <div class="note tip"><b>Why it matters:</b> keeps p99 recall well under the 200&nbsp;ms budget and turns the read-heavy hot path into Redis traffic — Postgres handles writes and cold misses only.</div>
 
     <h2 id="overview">Overview <a class="hash" href="#overview">#</a></h2>
     <p>MemAtom sits beside your LLM. Before generating, it <b>recalls</b> the most relevant memories and you inject them into context. After replying, it <b>captures</b> new memories from the turn — asynchronously, off the hot path. Memory is scoped to an <code>agentId</code>, not a chat thread, so it persists across sessions.</p>
