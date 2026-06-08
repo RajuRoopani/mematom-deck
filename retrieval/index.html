@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MemAtom · Retrieval &amp; Ranking Deep Dive</title>
+<meta name="description" content="How MemAtom's hybrid retrieval works, and how to improve ranking with reranking algorithms — normalization, RRF, cross-encoders, MMR, and learning-to-rank." />
+<meta property="og:title" content="MemAtom · Retrieval &amp; Ranking Deep Dive" />
+<meta property="og:description" content="From bi-encoder recall to cross-encoder reranking — a practical guide to better memory ranking." />
+<meta property="og:type" content="article" />
+<meta property="og:image" content="https://rajuroopani.github.io/mematom-deck/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#0d1117; --surface:#161b22; --surface2:#1c2128;
+  --border:#30363d; --accent:#388bfd; --accent2:#3fb950;
+  --accent3:#f78166; --accent4:#d2a8ff; --accent5:#ffa657;
+  --text:#e6edf3; --text-muted:#8b949e; --text-dim:#484f58;
+  --radius:8px; --font-mono:'JetBrains Mono','Fira Code',monospace;
+  --sig:#f78166;            /* document signature color (MemAtom orange) */
+  --sig-soft:rgba(247,129,102,.14);
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+html{ scroll-behavior:smooth; }
+body{ background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sans-serif; line-height:1.65; font-size:15.5px; }
+a{ color:var(--accent); text-decoration:none; } a:hover{ text-decoration:underline; }
+code{ font-family:var(--font-mono); font-size:.86em; }
+
+/* progress bar */
+#progress-bar{ position:fixed; top:0; left:0; height:3px; width:0; background:var(--sig); z-index:100; transition:width .1s; }
+
+/* sidebar */
+#sidebar{ position:fixed; top:0; left:0; width:260px; height:100vh; overflow-y:auto; background:var(--surface); border-right:1px solid var(--border); padding:24px 0; }
+#sidebar-header{ padding:0 22px 18px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+#sidebar-header h1{ font-size:.95rem; color:var(--sig); letter-spacing:.02em; font-weight:700; }
+#sidebar-header p{ font-size:.78rem; color:var(--text-muted); margin-top:3px; }
+#sidebar nav{ padding:0 12px; }
+#sidebar .section-label{ font-size:.66rem; text-transform:uppercase; letter-spacing:.14em; color:var(--text-dim); margin:16px 10px 6px; font-weight:700; }
+#sidebar nav a{ display:block; color:var(--text-muted); font-size:.84rem; padding:.34rem .7rem; border-radius:6px; border-left:2px solid transparent; }
+#sidebar nav a:hover{ color:var(--text); background:var(--surface2); text-decoration:none; }
+#sidebar nav a.active{ color:var(--sig); border-left-color:var(--sig); background:var(--sig-soft); }
+
+/* main */
+main{ margin-left:260px; max-width:980px; padding:48px 56px 120px; }
+@media (max-width:900px){ #sidebar{ display:none; } main{ margin-left:0; padding:28px 20px 80px; } }
+
+/* hero */
+.hero{ background:linear-gradient(135deg,#1f140f 0%,#1a0f0c 40%,#161b22 100%); border:1px solid var(--border); border-radius:14px; padding:34px 34px 30px; margin-bottom:40px; }
+.hero .badge{ display:inline-block; background:var(--sig-soft); color:var(--sig); font-size:.74rem; font-weight:700; letter-spacing:.06em; padding:.3em .8em; border-radius:999px; text-transform:uppercase; }
+.hero .status-badge{ display:inline-block; margin-left:.5rem; background:var(--surface2); color:var(--text-muted); font-size:.74rem; padding:.3em .8em; border-radius:999px; border:1px solid var(--border); }
+.hero h1{ font-size:2.3rem; font-weight:800; line-height:1.1; margin:16px 0 10px; letter-spacing:-.02em; }
+.hero h1 span{ color:var(--sig); }
+.hero p{ color:var(--text-muted); max-width:64ch; font-size:1.02rem; }
+.hero .meta{ display:flex; flex-wrap:wrap; gap:18px; margin-top:18px; }
+.hero .meta-item{ display:flex; align-items:center; gap:7px; font-size:.8rem; color:var(--text-muted); }
+.hero .dot{ width:9px; height:9px; border-radius:50%; }
+
+/* sections */
+section{ scroll-margin-top:24px; }
+h2{ font-size:1.5rem; font-weight:700; letter-spacing:-.01em; margin:8px 0 16px; display:flex; align-items:center; gap:12px; }
+.section-num{ display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:34px; background:var(--sig-soft); color:var(--sig); border-radius:8px; font-family:var(--font-mono); font-size:.95rem; font-weight:700; }
+h3{ font-size:1.12rem; font-weight:650; margin:24px 0 8px; color:#fff; }
+h4{ font-size:.98rem; font-weight:650; margin:16px 0 6px; }
+p{ margin:10px 0; color:#cdd5df; }
+ul,ol{ margin:10px 0 10px 22px; color:#cdd5df; } li{ margin:5px 0; }
+strong{ color:#fff; }
+.section-divider{ height:1px; background:var(--border); margin:40px 0; }
+.lead{ font-size:1.05rem; color:var(--text-muted); }
+
+/* code */
+pre{ background:#0b0e14; border:1px solid var(--border); border-radius:10px; padding:16px 18px; overflow-x:auto; margin:14px 0; font-family:var(--font-mono); font-size:.84rem; line-height:1.6; }
+pre code{ font-size:inherit; }
+p code,li code,td code{ background:var(--surface2); border:1px solid var(--border); border-radius:5px; padding:.08em .42em; color:var(--accent5); font-size:.84em; }
+.k{color:#ff9d7a}.f{color:#6cb6ff}.s{color:#7ee787}.c{color:#637084;font-style:italic}.n{color:#d2a8ff}.t{color:#79c0ff}
+
+/* formula block */
+.formula{ background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--sig); border-radius:8px; padding:14px 18px; margin:14px 0; font-family:var(--font-mono); font-size:.92rem; color:#e6edf3; overflow-x:auto; }
+.formula .lbl{ display:block; font-family:'Inter'; font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; color:var(--text-dim); margin-bottom:6px; }
+
+/* callouts */
+.callout{ border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin:16px 0; font-size:.92rem; }
+.callout strong:first-child{ display:block; font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; margin-bottom:5px; }
+.callout-info{ background:rgba(56,139,253,.08); border-color:rgba(56,139,253,.4); } .callout-info strong:first-child{ color:var(--accent); }
+.callout-warn{ background:rgba(255,166,87,.08); border-color:rgba(255,166,87,.4); } .callout-warn strong:first-child{ color:var(--accent5); }
+.callout-success{ background:rgba(63,185,80,.08); border-color:rgba(63,185,80,.4); } .callout-success strong:first-child{ color:var(--accent2); }
+.callout-danger{ background:rgba(248,81,73,.08); border-color:rgba(248,81,73,.45); } .callout-danger strong:first-child{ color:#f85149; }
+
+/* diagrams */
+.diagram-container{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:22px; margin:18px 0; }
+.diagram-title{ font-size:.74rem; text-transform:uppercase; letter-spacing:.1em; color:var(--text-dim); margin-bottom:16px; text-align:center; font-weight:700; }
+.box-row{ display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; }
+.box{ border:1px solid var(--border); border-radius:9px; padding:12px 14px; text-align:center; font-size:.86rem; font-weight:600; min-width:104px; background:var(--surface2); display:flex; flex-direction:column; gap:3px; }
+.box small{ font-weight:400; font-size:.7rem; color:var(--text-muted); }
+.box-blue{ border-color:rgba(56,139,253,.5); } .box-blue small{ color:#79c0ff; }
+.box-green{ border-color:rgba(63,185,80,.5); }
+.box-orange{ border-color:rgba(247,129,102,.6); background:var(--sig-soft); }
+.box-purple{ border-color:rgba(210,168,255,.5); }
+.box-red{ border-color:rgba(248,81,73,.5); }
+.box-gray{ border-color:var(--border); }
+.box-teal{ border-color:rgba(57,217,217,.5); }
+.arrow{ color:var(--sig); font-size:1.3rem; font-weight:700; }
+@media (max-width:640px){ .box-row{ flex-direction:column; } .arrow{ transform:rotate(90deg); } }
+
+/* pro/con */
+.pro-con-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0; }
+.pro-card,.con-card{ border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.pro-card{ background:rgba(63,185,80,.06); border-color:rgba(63,185,80,.3); }
+.con-card{ background:rgba(248,81,73,.06); border-color:rgba(248,81,73,.3); }
+.pro-card h3,.con-card h3{ font-size:.95rem; margin:0 0 6px; }
+.pro-card ul,.con-card ul{ margin:0 0 0 18px; font-size:.88rem; }
+@media (max-width:640px){ .pro-con-grid{ grid-template-columns:1fr; } }
+
+/* tables */
+.tablewrap{ overflow-x:auto; margin:16px 0; }
+table{ width:100%; border-collapse:collapse; font-size:.86rem; }
+th,td{ text-align:left; padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+th{ color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em; font-size:.7rem; font-weight:700; background:var(--surface); }
+tbody tr:hover{ background:var(--surface); }
+td code{ white-space:nowrap; }
+
+/* pills */
+.pill-list{ display:flex; flex-wrap:wrap; gap:7px; margin:12px 0; }
+.pill{ font-size:.74rem; font-weight:600; padding:.24em .7em; border-radius:999px; border:1px solid var(--border); }
+.pill-blue{ color:#79c0ff; border-color:rgba(56,139,253,.5); background:rgba(56,139,253,.1); }
+.pill-green{ color:#7ee787; border-color:rgba(63,185,80,.5); background:rgba(63,185,80,.1); }
+.pill-orange{ color:#ffa657; border-color:rgba(255,166,87,.5); background:rgba(255,166,87,.1); }
+.pill-purple{ color:#d2a8ff; border-color:rgba(210,168,255,.5); background:rgba(210,168,255,.1); }
+.pill-red{ color:#ff7b72; border-color:rgba(248,81,73,.5); background:rgba(248,81,73,.1); }
+.pill-teal{ color:#56d4dd; border-color:rgba(57,217,217,.5); background:rgba(57,217,217,.1); }
+
+/* cost bar */
+.cost-total{ display:flex; flex-wrap:wrap; gap:14px; margin:18px 0; }
+.cost-item{ flex:1; min-width:120px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; }
+.cost-item .val{ font-size:1.5rem; font-weight:800; color:var(--sig); font-family:var(--font-mono); }
+.cost-item .lbl{ font-size:.74rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
+
+/* timeline */
+.timeline{ border-left:2px solid var(--border); margin:18px 0 18px 8px; padding-left:22px; }
+.tl-item{ position:relative; margin-bottom:18px; }
+.tl-item::before{ content:""; position:absolute; left:-29px; top:5px; width:11px; height:11px; border-radius:50%; background:var(--sig); border:2px solid var(--bg); }
+.tl-item h4{ margin:0 0 2px; color:#fff; }
+.tl-item p{ margin:2px 0; font-size:.88rem; color:var(--text-muted); }
+
+footer{ margin-top:50px; padding-top:22px; border-top:1px solid var(--border); color:var(--text-dim); font-size:.84rem; }
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+
+<aside id="sidebar">
+  <div id="sidebar-header"><h1>◇ MemAtom · Retrieval</h1><p>Ranking &amp; reranking deep dive</p></div>
+  <nav>
+    <div class="section-label">Foundations</div>
+    <a href="#overview">01 · The two-stage pattern</a>
+    <a href="#candidates">02 · Candidate generation</a>
+    <a href="#current">03 · The current ranker</a>
+    <a href="#limits">04 · Why linear fusion is a floor</a>
+    <div class="section-label">Reranking algorithms</div>
+    <a href="#norm">05 · Normalization &amp; RRF</a>
+    <a href="#cross">06 · Cross-encoder rerank</a>
+    <a href="#mmr">07 · Diversity (MMR)</a>
+    <a href="#ltr">08 · Learning-to-rank</a>
+    <a href="#llm">09 · LLM-as-reranker</a>
+    <a href="#calib">10 · Calibration &amp; abstention</a>
+    <div class="section-label">Putting it together</div>
+    <a href="#path">11 · Upgrade path</a>
+    <a href="#measure">12 · How to measure gains</a>
+  </nav>
+</aside>
+
+<main>
+  <div class="hero">
+    <span class="badge">📐 Technical Deep Dive</span>
+    <span class="status-badge">Retrieval &amp; Ranking</span>
+    <h1>Better memory ranking, <span>step by step</span></h1>
+    <p>How MemAtom's hybrid retrieval actually works under the hood — and a practical, ordered path to a sharper top-K using reranking: score normalization, Reciprocal Rank Fusion, cross-encoders, MMR diversity, and learning-to-rank.</p>
+    <div class="meta">
+      <div class="meta-item"><span class="dot" style="background:var(--accent)"></span>Stage 1 · candidate generation</div>
+      <div class="meta-item"><span class="dot" style="background:var(--sig)"></span>Stage 2 · reranking</div>
+      <div class="meta-item"><span class="dot" style="background:var(--accent2)"></span>Grounded in <code>recall.ts</code> / <code>fusion.ts</code></div>
+    </div>
+  </div>
+
+  <!-- 01 -->
+  <section id="overview">
+    <h2><span class="section-num">01</span> The two-stage pattern</h2>
+    <p class="lead">Good retrieval is almost always <strong>two stages</strong>: a cheap, high-recall <em>candidate generator</em> that scans everything, then an expensive, high-precision <em>reranker</em> that reorders a small shortlist.</p>
+    <p>You can't run an expensive scorer over a million atoms per turn — but you <em>can</em> run it over the top 50. So stage 1 trades precision for speed and breadth; stage 2 trades breadth for precision on what survived.</p>
+    <div class="diagram-container">
+      <div class="diagram-title">Two-stage retrieval</div>
+      <div class="box-row">
+        <div class="box box-gray">query<small>user turn</small></div>
+        <div class="arrow">→</div>
+        <div class="box box-blue">Stage 1<small>recall · top-50<br>cheap, broad</small></div>
+        <div class="arrow">→</div>
+        <div class="box box-orange" style="border-style:dashed;">Stage 2<small>rerank · top-K<br>precise, narrow</small></div>
+        <div class="arrow">→</div>
+        <div class="box box-green">inject<small>into prompt</small></div>
+      </div>
+    </div>
+    <p>MemAtom today does a <strong>strong stage 1</strong> (hybrid vector + graph) and a <strong>lightweight stage 2</strong> (a weighted linear blend). Everything in this report is about making stage 2 — the reranker — do more of the heavy lifting, where most of the quality gains live.</p>
+    <div class="callout callout-info"><strong>Mental model</strong>Stage 1 decides <em>what's even considered</em>. Stage 2 decides <em>what wins</em>. If a relevant atom never enters the candidate pool, no reranker can save it — so recall@candidate-pool is the ceiling on everything downstream.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 02 -->
+  <section id="candidates">
+    <h2><span class="section-num">02</span> Stage 1 — candidate generation</h2>
+    <p>MemAtom runs <strong>two independent retrievers in parallel</strong> and unions their candidates. Each catches what the other misses.</p>
+
+    <h3>Vector path — semantic similarity</h3>
+    <p>The query is embedded (local MiniLM, 384-d) and matched against the atom index in Postgres + <code>pgvector</code> using an <strong>HNSW</strong> graph index with <strong>cosine</strong> distance. We pull the nearest 50.</p>
+    <div class="formula"><span class="lbl">cosine similarity</span>similarity = 1 − cosine_distance(q, d) = (q · d) / (‖q‖‖d‖)   ∈ [0, 1]</div>
+    <pre><code><span class="c">-- pgvector, HNSW, pre-filtered by scope/status</span>
+<span class="k">SELECT</span> id, content, <span class="n">1</span> - (embedding &lt;=&gt; $q::vector) <span class="k">AS</span> similarity
+<span class="k">FROM</span> atoms
+<span class="k">WHERE</span> agent_id = $a <span class="k">AND</span> status = <span class="s">'warm'</span>
+<span class="k">ORDER BY</span> embedding &lt;=&gt; $q::vector   <span class="c">-- nearest first</span>
+<span class="k">LIMIT</span> <span class="n">50</span>;</code></pre>
+    <p class="lead" style="font-size:.95rem">Bi-encoder retrieval: query and document are embedded <em>separately</em>, then compared by a cheap vector op. Fast (sub-millisecond with HNSW), but the two never "see" each other — there's no token-level interaction. Hold that thought; it's exactly what the cross-encoder in §06 fixes.</p>
+
+    <h3>Graph path — entity traversal</h3>
+    <p>Entities mentioned in the query are matched against the knowledge graph (<code>entities</code> nodes, <code>atom_entities</code> edges) and traversed 1–2 hops. This catches atoms that share an entity but have <em>near-zero</em> vector similarity — the classic "everyone on Project Titan" query that pure embeddings smear away.</p>
+    <div class="formula"><span class="lbl">graph proximity (fusion.ts)</span>graphProximity(hop, overlap) = hopWeight · min(1, overlap / 2)
+   where hopWeight = 1.0 if hop ≤ 1 (direct mention)
+                   = 0.5 if hop = 2 (shared-entity neighbor)</div>
+
+    <div class="callout callout-success"><strong>Why hybrid beats either alone</strong>Vector answers <em>"what's semantically near X."</em> Graph answers <em>"what's relationally connected to X."</em> Reciprocal-rank-fusing the two lists gives a measured <strong>+10–12% recall@10</strong> over vector-only in classic hybrid-search evals — and it's the reason a graph-only atom (similarity 0) can still surface.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 03 -->
+  <section id="current">
+    <h2><span class="section-num">03</span> The current ranker — weighted hybrid fusion</h2>
+    <p>Today, <code>fuseHybrid()</code> merges the two candidate lists and scores every atom with a <strong>weighted linear blend</strong> of four normalized signals, then sorts and takes the top-K.</p>
+    <div class="formula"><span class="lbl">current scoring function</span>score(d) = w_v·similarity + w_g·graphScore + w_r·recency + w_p·pinned
+
+defaults:  w_v = 0.55   w_g = 0.25   w_r = 0.15   w_p = 0.05</div>
+    <p>Each signal is deliberately kept in <strong>[0, 1]</strong> so the weights are comparable:</p>
+    <ul>
+      <li><code>similarity</code> — cosine, already 0–1 (0 if the atom only came from the graph path).</li>
+      <li><code>graphScore</code> — <code>graphProximity()</code>, 0–1 (0 if only from the vector path).</li>
+      <li><code>recency</code> — exponential decay with a 14-day half-life:</li>
+    </ul>
+    <div class="formula"><span class="lbl">recency decay (fusion.ts)</span>recency(d) = exp( −ln2 · ageDays / halfLifeDays ),   halfLife = 14
+   → 1.0 at age 0,  0.5 at 14 days,  0.25 at 28 days</div>
+    <ul>
+      <li><code>pinned</code> — 1 if the user pinned it, else 0 (a small, honest nudge — pins mostly act earlier, by clamping salience).</li>
+    </ul>
+    <p>Two more rules shape the output:</p>
+    <ul>
+      <li><strong>Source tagging</strong> — an atom is credited as a <code>vector</code> match only if its similarity clears <code>VECTOR_SOURCE_FLOOR = 0.15</code>; it's a <code>graph</code> match if traversal found it. The <code>sources</code> array makes every result explainable.</li>
+      <li><strong>Noise gate</strong> — atoms that matched <em>no</em> meaningful path (low similarity, no graph link) are dropped, not ranked. This is a cheap precision guard.</li>
+    </ul>
+    <pre><code><span class="c">// fusion.ts — the heart of stage 2 today</span>
+<span class="k">for</span> (<span class="k">const</span> e <span class="k">of</span> byId.values()) {
+  <span class="k">if</span> (e.sources.size === <span class="n">0</span>) <span class="k">continue</span>;            <span class="c">// noise gate</span>
+  <span class="k">const</span> recency = <span class="f">recencyDecay</span>(e.atom.createdAt, now, halfLife);
+  <span class="k">const</span> score =
+      w.vector  * e.similarity
+    + w.graph   * e.graphScore
+    + w.recency * recency
+    + w.pinned  * (e.atom.pinned ? <span class="n">1</span> : <span class="n">0</span>);
+  ranked.push({ ...e.atom, score, similarity: e.similarity, graphScore: e.graphScore, sources:[...e.sources] });
+}
+<span class="k">return</span> ranked.<span class="f">sort</span>((a,b) =&gt; b.score - a.score).<span class="f">slice</span>(<span class="n">0</span>, topK);</code></pre>
+    <div class="callout callout-info"><strong>This is a linear "combSUM"</strong>Summing weighted, normalized per-retriever scores is a real, respectable fusion method (CombSUM). It's fast, transparent, and tunable. It is also the <em>floor</em> of what's possible — the next sections are the ceiling.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 04 -->
+  <section id="limits">
+    <h2><span class="section-num">04</span> Why linear fusion is a floor, not a ceiling</h2>
+    <p>A weighted sum has three structural weaknesses. Naming them tells you exactly which reranker fixes which.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Weakness</th><th>What goes wrong</th><th>Fixed by</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Score-scale mismatch</strong></td><td>Cosine 0.3–0.9 and graphProximity 0.5/1.0 don't live on the same distribution; summing them lets one retriever quietly dominate.</td><td>Normalization / <strong>RRF</strong> (§05)</td></tr>
+        <tr><td><strong>No query–doc interaction</strong></td><td>A bi-encoder can't tell "user is allergic to peanuts" from "user is <em>not</em> allergic to peanuts" — the vectors are nearly identical. A sum of bi-encoder scores inherits that blindness.</td><td><strong>Cross-encoder</strong> (§06)</td></tr>
+        <tr><td><strong>Static, hand-set weights</strong></td><td>0.55 / 0.25 / 0.15 / 0.05 were chosen by intuition, not learned from outcomes; the optimum differs per query type.</td><td><strong>Learning-to-rank</strong> (§08)</td></tr>
+        <tr><td><strong>No redundancy control</strong></td><td>Top-K can be three paraphrases of the same fact, wasting context budget.</td><td><strong>MMR</strong> (§07)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout callout-warn"><strong>Order of operations</strong>Do them cheapest-first. Normalization + RRF is a config change. A cross-encoder is the single biggest quality jump but adds latency. Learning-to-rank needs logged data. Most teams get 80% of the win from §05 + §06 alone.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 05 -->
+  <section id="norm">
+    <h2><span class="section-num">05</span> Fix #1 — normalization &amp; Reciprocal Rank Fusion</h2>
+    <p>Before you fuse scores from different retrievers, make them comparable. Two standard moves:</p>
+
+    <h3>Score normalization (CombSUM, but honest)</h3>
+    <p>Rescale each retriever's scores to a common range <em>per query</em>, then sum.</p>
+    <div class="formula"><span class="lbl">min-max / z-score</span>minmax(s) = (s − min) / (max − min)            ∈ [0,1]
+zscore(s) = (s − μ) / σ                        zero-mean, unit-variance</div>
+    <p>Min-max is simple but sensitive to outliers; z-score is more robust when score distributions are roughly normal. This alone fixes the "one retriever dominates" problem without touching weights.</p>
+
+    <h3>Reciprocal Rank Fusion (RRF) — the workhorse</h3>
+    <p>RRF ignores raw scores entirely and fuses by <strong>rank position</strong>. It's astonishingly robust — no calibration, no tuning — and is the default fusion in Elasticsearch, OpenSearch, and Azure AI Search.</p>
+    <div class="formula"><span class="lbl">reciprocal rank fusion</span>RRF(d) = Σ_i   1 / (k + rank_i(d)),     k ≈ 60
+
+   rank_i(d) = position of d in retriever i's list (1-based)
+   weighted variant:  RRF(d) = Σ_i  w_i / (k + rank_i(d))</div>
+    <p>An atom ranked #1 by vectors and #3 by graph scores <code>1/61 + 1/63</code>. Appearing high in <em>both</em> lists compounds; the constant <code>k</code> damps the influence of low ranks. Because it's rank-based, a graph hit with similarity 0 competes fairly with a strong vector hit.</p>
+    <pre><code><span class="c">// drop-in: fuse the vector list and graph list by rank</span>
+<span class="k">function</span> <span class="f">rrf</span>(lists, k = <span class="n">60</span>) {
+  <span class="k">const</span> score = <span class="k">new</span> <span class="t">Map</span>();
+  <span class="k">for</span> (<span class="k">const</span> list <span class="k">of</span> lists)
+    list.<span class="f">forEach</span>((d, i) =&gt; score.<span class="f">set</span>(d.id, (score.<span class="f">get</span>(d.id) ?? <span class="n">0</span>) + <span class="n">1</span> / (k + i + <span class="n">1</span>)));
+  <span class="k">return</span> [...score].<span class="f">sort</span>((a,b) =&gt; b[<span class="n">1</span>] - a[<span class="n">1</span>]);
+}</code></pre>
+    <div class="pro-con-grid">
+      <div class="pro-card"><h3>✅ Pros</h3><ul><li>No score calibration needed</li><li>Robust across very different retrievers</li><li>One hyperparameter (k), ~zero cost</li></ul></div>
+      <div class="con-card"><h3>❌ Cons</h3><ul><li>Throws away score <em>magnitude</em> (a runaway-best doc looks like a normal #1)</li><li>Still no query–doc interaction</li></ul></div>
+    </div>
+    <div class="callout callout-success"><strong>MemAtom fit</strong>Easiest real upgrade: keep recency/pin as additive boosts, but fuse the <em>vector</em> and <em>graph</em> candidate lists with weighted RRF instead of summing raw similarity + graphProximity. It directly removes the score-scale weakness from §04 with a few lines in <code>fuseHybrid()</code>.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 06 -->
+  <section id="cross">
+    <h2><span class="section-num">06</span> Fix #2 — cross-encoder reranking <span class="pill pill-orange" style="font-size:.6em;margin-left:6px;">biggest lever</span></h2>
+    <p>This is where retrieval quality really jumps. The difference is architectural:</p>
+    <div class="diagram-container">
+      <div class="diagram-title">Bi-encoder (stage 1) vs Cross-encoder (stage 2)</div>
+      <div class="box-row">
+        <div class="box box-blue">Bi-encoder<small>embed(q), embed(d)<br>separately → cosine</small></div>
+        <div class="box box-gray" style="border:none;background:none;font-size:.8rem;color:var(--text-muted);max-width:150px;">fast · O(1) compare<br>no interaction<br><strong style="color:#79c0ff">recall</strong></div>
+        <div class="arrow">vs</div>
+        <div class="box box-orange" style="border-style:dashed;">Cross-encoder<small>[q ⊕ d] through one<br>transformer → score</small></div>
+        <div class="box box-gray" style="border:none;background:none;font-size:.8rem;color:var(--text-muted);max-width:150px;">slow · O(N) inference<br>full token interaction<br><strong style="color:#ffa657">precision</strong></div>
+      </div>
+    </div>
+    <p>A <strong>cross-encoder</strong> concatenates the query and a candidate and runs them through a transformer <em>together</em>, so attention sees every query token against every document token. It outputs one relevance score. That joint attention is what lets it catch negation, qualifiers, and subtle mismatches a bi-encoder smears away.</p>
+    <div class="formula"><span class="lbl">cross-encoder relevance</span>rel(q, d) = σ( CrossEncoder( [CLS] q [SEP] d [SEP] ) )
+
+apply only to the top-N candidates from stage 1 (N ≈ 50),
+then re-sort by rel and take top-K.</div>
+    <p>You never run it over the whole store — only the ~50 candidates stage 1 already shortlisted. That's the entire point of two-stage retrieval.</p>
+
+    <h3>Model choices</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Reranker</th><th>Where it runs</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>bge-reranker-v2-m3</code></td><td>local (ONNX / transformers.js)</td><td>Strong open-weight cross-encoder; multilingual; great default.</td></tr>
+        <tr><td><code>ms-marco-MiniLM-L-6-v2</code></td><td>local, tiny</td><td>~22M params, very fast on CPU; the pragmatic MemAtom pick.</td></tr>
+        <tr><td>Cohere Rerank / Voyage Rerank</td><td>hosted API</td><td>Best quality, zero infra, per-call cost + network latency.</td></tr>
+        <tr><td>ColBERT (late interaction)</td><td>local, indexed</td><td>Token-level match with precomputed doc vectors — a middle ground.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout callout-warn"><strong>Latency budget</strong>Cross-encoding 50 candidates costs roughly <strong>20–80 ms</strong> on a small local model (CPU), more for big ones. Keep it under the 200 ms budget by: reranking only top-N (not top-500), batching the N pairs in one forward pass, caching <code>(query, atomId) → score</code> for repeated queries, and serving the cache hit from Redis.</p></div>
+    <pre><code><span class="c">// the Reranker seam — fits after fuseHybrid()</span>
+<span class="k">interface</span> <span class="t">Reranker</span> {
+  <span class="f">rerank</span>(query: <span class="t">string</span>, candidates: <span class="t">RecalledAtom</span>[], k: <span class="t">number</span>)
+    : <span class="t">Promise</span>&lt;<span class="t">RecalledAtom</span>[]&gt;;
+}
+
+<span class="c">// recall() becomes a clean two-stage pipeline:</span>
+<span class="k">const</span> pool   = <span class="f">fuseHybrid</span>({ vectorHits, graphHits, weights, topK: <span class="n">50</span> }); <span class="c">// stage 1</span>
+<span class="k">const</span> topK   = <span class="k">await</span> reranker.<span class="f">rerank</span>(query, pool, <span class="n">8</span>);                  <span class="c">// stage 2</span></code></pre>
+    <div class="callout callout-success"><strong>Expected impact</strong>On standard IR benchmarks, adding a cross-encoder reranker over a bi-encoder commonly lifts <strong>nDCG@10 by 10–30%</strong>. For a memory system this shows up as "it stopped surfacing the <em>almost</em>-right atom."</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 07 -->
+  <section id="mmr">
+    <h2><span class="section-num">07</span> Fix #3 — diversity with MMR</h2>
+    <p>Relevance alone can return three paraphrases of the same fact, burning context budget and starving the prompt of breadth. <strong>Maximal Marginal Relevance</strong> greedily builds the top-K, penalizing each pick by how similar it is to what's already chosen.</p>
+    <div class="formula"><span class="lbl">maximal marginal relevance</span>next = argmax_{d ∈ R∖S} [ λ·rel(d, q) − (1−λ)·max_{d′ ∈ S} sim(d, d′) ]
+
+   R = candidate pool   S = already-selected   λ ∈ [0,1]
+   λ = 1 → pure relevance   λ → 0 → pure diversity   (λ ≈ 0.7 typical)</div>
+    <p>It reuses the embeddings you already have (<code>sim(d, d′)</code> is just cosine between two atoms), so it's nearly free and runs <em>after</em> the reranker on the shortlist.</p>
+    <div class="callout callout-info"><strong>MemAtom note</strong>You already dedupe on <em>write</em> (the <code>dedupeThreshold</code> in <code>capture()</code>). MMR is the read-time complement: even with distinct atoms, it ensures the injected K spans different facts/entities rather than piling onto one topic.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 08 -->
+  <section id="ltr">
+    <h2><span class="section-num">08</span> Fix #4 — learning-to-rank from feedback</h2>
+    <p>Stop hand-tuning weights. <strong>Learning-to-rank (LTR)</strong> trains a model to order candidates, using features you already compute plus signals you already collect.</p>
+    <h3>Three flavors</h3>
+    <div class="pill-list">
+      <span class="pill pill-blue">Pointwise — regress a relevance score per doc</span>
+      <span class="pill pill-purple">Pairwise — learn d₁ &gt; d₂ (RankNet)</span>
+      <span class="pill pill-orange">Listwise — optimize the whole ordering (LambdaMART)</span>
+    </div>
+    <p><strong>LambdaMART</strong> (gradient-boosted trees, e.g. LightGBM <code>rank:ndcg</code> / XGBoost) is the battle-tested default — it directly optimizes a ranking metric like nDCG and handles heterogeneous features well.</p>
+    <h3>Features — you already have most of these</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Group</th><th>Features</th></tr></thead>
+      <tbody>
+        <tr><td>Relevance</td><td><code>similarity</code>, <code>graphScore</code>, cross-encoder score, hop, entity-overlap count</td></tr>
+        <tr><td>Memory state</td><td><code>salience</code>, <code>recency</code>, <code>accessCount</code>, <code>pinned</code>, age, atom <code>type</code></td></tr>
+        <tr><td>Query/match</td><td>query length, #query entities, lexical overlap (BM25), type-match flag</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Labels — for free, from the product</h3>
+    <ul>
+      <li><strong>Pin</strong> → strong positive ("this mattered").</li>
+      <li><strong>Forget / tombstone</strong> → strong negative ("wrongly surfaced").</li>
+      <li><strong>Cited in the answer</strong> (the LLM used the atom) → positive.</li>
+      <li><strong>Re-ask / follow-up miss</strong> → the recalled set was insufficient.</li>
+    </ul>
+    <div class="callout callout-warn"><strong>When to reach for LTR</strong>Only after you're logging recalls + outcomes and have a labeled set. It's the highest ceiling but the most operationally heavy — and a good cross-encoder often gets you most of the way first.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 09 -->
+  <section id="llm">
+    <h2><span class="section-num">09</span> LLM-as-reranker</h2>
+    <p>Hand the candidate shortlist to an LLM and ask it to select/order the most relevant — a <strong>listwise</strong> reranker with real reasoning. Variants: pointwise ("rate 0–10"), pairwise ("which is more relevant"), and listwise/permutation ("return ids best-first"), the last being strongest.</p>
+    <div class="pro-con-grid">
+      <div class="pro-card"><h3>✅ Pros</h3><ul><li>Best on reasoning-heavy relevance &amp; multi-hop</li><li>Understands negation, intent, instructions</li><li>Zero training</li></ul></div>
+      <div class="con-card"><h3>❌ Cons</h3><ul><li>Slow + costly per turn — usually too heavy for the hot path</li><li>Position bias &amp; nondeterminism</li><li>Context limits on candidate count</li></ul></div>
+    </div>
+    <div class="callout callout-info"><strong>Where it shines</strong>Use the LLM reranker <em>offline</em> to generate gold labels (distill it into a cross-encoder or LTR model), or online only for small N on high-value queries. It's a teacher more than a serving-path component.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 10 -->
+  <section id="calib">
+    <h2><span class="section-num">10</span> Calibration &amp; abstention</h2>
+    <p>Ranking decides <em>order</em>; calibration decides <em>whether to inject at all</em>. A reranker score of "0.8" should mean "80% likely relevant" — raw model scores rarely do. Map them to probabilities, then set a threshold to <strong>abstain</strong> when nothing is good enough (the negative/absence case from your eval).</p>
+    <div class="formula"><span class="lbl">calibration</span>Platt:    p = σ(a·score + b)          (fit a, b on a labeled set)
+Isotonic: p = monotonic step-fit  (non-parametric, more flexible)
+
+inject d only if p(d) ≥ τ ;  else return ∅ (don't pollute the prompt)</div>
+    <div class="callout callout-success"><strong>Why it matters for memory</strong>Injecting a confidently-wrong memory is worse than injecting none — it actively misleads the agent. MemAtom's current <code>VECTOR_SOURCE_FLOOR</code> + noise gate is a crude version of this; calibrated thresholds make abstention principled and tunable.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 11 -->
+  <section id="path">
+    <h2><span class="section-num">11</span> A phased upgrade path for MemAtom</h2>
+    <p>Sequenced by effort-to-impact. Each phase ships independently behind the existing interfaces — nothing here is a rewrite.</p>
+    <div class="timeline">
+      <div class="tl-item"><h4>Phase 1 · Normalize + RRF <span class="pill pill-green" style="font-size:.7em">low effort</span></h4><p>Fuse the vector &amp; graph candidate lists with weighted RRF (k=60) inside <code>fuseHybrid()</code>; keep recency/pin as additive boosts. Removes the score-scale weakness. Pure code change, no new deps.</p></div>
+      <div class="tl-item"><h4>Phase 2 · Cross-encoder rerank <span class="pill pill-orange" style="font-size:.7em">highest impact</span></h4><p>Add a <code>Reranker</code> interface; widen stage-1 to top-50, cross-encode locally (<code>ms-marco-MiniLM-L-6-v2</code> via ONNX) to top-8. Cache scores in Redis. The single biggest nDCG jump.</p></div>
+      <div class="tl-item"><h4>Phase 3 · MMR diversity <span class="pill pill-green" style="font-size:.7em">low effort</span></h4><p>Apply MMR (λ≈0.7) over the reranked shortlist using existing embeddings. Stops near-duplicate atoms from crowding the top-K.</p></div>
+      <div class="tl-item"><h4>Phase 4 · Calibration + abstention <span class="pill pill-blue" style="font-size:.7em">medium</span></h4><p>Fit Platt/isotonic on logged labels; replace the hard floor with a calibrated threshold τ. Principled "inject nothing" behavior.</p></div>
+      <div class="tl-item"><h4>Phase 5 · Learning-to-rank <span class="pill pill-purple" style="font-size:.7em">data-gated</span></h4><p>Once recalls + pin/forget/cited signals are logged, train LambdaMART on the feature set and swap it in as the reranker. Highest ceiling.</p></div>
+    </div>
+    <div class="cost-total">
+      <div class="cost-item"><div class="val">RRF</div><div class="lbl">Phase 1 · ~1 day</div></div>
+      <div class="cost-item"><div class="val">+CE</div><div class="lbl">Phase 2 · ~3–5 days</div></div>
+      <div class="cost-item"><div class="val">MMR</div><div class="lbl">Phase 3 · ~½ day</div></div>
+      <div class="cost-item"><div class="val">LTR</div><div class="lbl">Phase 5 · data-gated</div></div>
+    </div>
+    <div class="callout callout-info"><strong>The seam</strong>All of this plugs in <em>after</em> candidate generation. <code>recall()</code> becomes: <code>fuseHybrid(topN=50)</code> → <code>reranker.rerank()</code> → <code>mmr()</code> → top-K. Stage 1 (vector + graph) is untouched; you're only upgrading stage 2.</div>
+  </section>
+  <div class="section-divider"></div>
+
+  <!-- 12 -->
+  <section id="measure">
+    <h2><span class="section-num">12</span> How to measure the gains</h2>
+    <p>Never ship a reranker on vibes — every phase above must beat the last on a fixed golden set. Track:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Metric</th><th>What it tells you</th></tr></thead>
+      <tbody>
+        <tr><td><strong>nDCG@k</strong></td><td>Primary — graded relevance <em>and</em> ordering. The number a reranker should move.</td></tr>
+        <tr><td><strong>Recall@k / Hit@k</strong></td><td>Did the gold atom make the injected set? (Bounded by stage-1 pool recall.)</td></tr>
+        <tr><td><strong>MRR</strong></td><td>How high the first relevant atom lands.</td></tr>
+        <tr><td><strong>Abstention / FP rate</strong></td><td>On negative probes — does it correctly inject nothing?</td></tr>
+        <tr><td><strong>p95 latency</strong></td><td>Reranking must stay inside the 200 ms budget.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Run each phase as an <strong>A/B against the previous</strong> on the same probe set; gate CI on "no nDCG regression." The vector-vs-graph and rerank-on/off ablations are exactly the experiments that justify each added millisecond.</p>
+    <div class="callout callout-success"><strong>Bottom line</strong>MemAtom's stage 1 (hybrid vector + graph) is already strong. The fastest path to noticeably better memory is a <strong>real stage-2 reranker</strong> — start with RRF for fusion sanity, then a local cross-encoder for the big precision jump, then MMR for breadth. Measure every step on nDCG.</div>
+
+    <footer>
+      <strong style="color:var(--sig)">MemAtom</strong> · Retrieval &amp; Ranking Deep Dive ·
+      <a href="https://rajuroopani.github.io/mematom-deck/docs/">developer docs</a> ·
+      <a href="https://rajuroopani.github.io/mematom-deck/">deck</a><br>
+      Grounded in <code>packages/memory-sdk/src/recall.ts</code> &amp; <code>graph/fusion.ts</code>.
+    </footer>
+  </section>
+</main>
+
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        document.querySelectorAll('#sidebar nav a').forEach(l => l.classList.remove('active'));
+        const a = document.querySelector(`#sidebar nav a[href="#${e.target.id}"]`);
+        if (a) a.classList.add('active');
+      }
+    });
+  }, { threshold: 0.25 });
+  document.querySelectorAll('section[id]').forEach(s => observer.observe(s));
+
+  window.addEventListener('scroll', () => {
+    const el = document.getElementById('progress-bar');
+    const pct = (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100;
+    el.style.width = Math.min(pct, 100) + '%';
+  });
+</script>
+</body>
+</html>

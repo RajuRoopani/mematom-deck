@@ -229,6 +229,7 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
   <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
   <div class="brand">◇ <b>MemAtom</b> <span>· docs</span></div>
   <nav>
+    <a class="hidem" href="../retrieval/">Retrieval guide</a>
     <a class="hidem" href="https://rajuroopani.github.io/mematom-deck/">Deck</a>
     <a href="https://github.com/RajuRoopani/mematom" target="_blank" rel="noopener" class="ghbtn">GitHub ★</a>
   </nav>
@@ -508,6 +509,7 @@ footer{ border-top:1px solid var(--edge); margin-top:3.5rem; padding-top:1.6rem;
       <li><b>Rerank</b> — the union is scored by a weighted blend of <code>vector · graph · recency · pin</code>.</li>
     </ul>
     <p>Each returned atom carries a <code>sources</code> array (<code>"vector"</code> / <code>"graph"</code>) so every recall is explainable. Set <code>enableGraph: false</code> for vector-only retrieval.</p>
+    <div class="note tip"><b>Go deeper:</b> the <a href="../retrieval/">Retrieval &amp; Ranking deep dive</a> walks through exactly how scoring works and how to improve it with reranking — normalization, RRF, cross-encoders, MMR, and learning-to-rank.</div>
 
     <h2 id="creatememory">createMemory(config) <a class="hash" href="#creatememory">#</a></h2>
     <p>Builds a <code>Memory</code> façade wired with your dependencies. Returns <code>{ recall, capture, repository, embedder }</code>.</p>
